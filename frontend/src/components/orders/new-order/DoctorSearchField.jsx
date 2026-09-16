@@ -20,6 +20,9 @@ function DoctorStatusNote({
   linkHref = "",
   linkLabel = "",
   onLinkClick,
+  actionLabel = "",
+  onAction,
+  actionDisabled = false,
 }) {
   const styles = {
     info: {
@@ -52,14 +55,30 @@ function DoctorStatusNote({
           {message}
         </p>
       ) : null}
-      {linkHref ? (
-        <Link
-          href={linkHref}
-          onClick={() => onLinkClick?.()}
-          className={`${title || message ? "mt-2" : ""} inline-flex text-[11px] font-semibold underline ${styles.link}`}
+      {linkHref || actionLabel ? (
+        <div
+          className={`${title || message ? "mt-2" : ""} flex flex-wrap items-center gap-x-3 gap-y-1`}
         >
-          {linkLabel}
-        </Link>
+          {linkHref ? (
+            <Link
+              href={linkHref}
+              onClick={() => onLinkClick?.()}
+              className={`inline-flex text-[11px] font-semibold underline ${styles.link}`}
+            >
+              {linkLabel}
+            </Link>
+          ) : null}
+          {actionLabel ? (
+            <button
+              type="button"
+              disabled={actionDisabled}
+              onClick={() => onAction?.()}
+              className={`inline-flex text-[11px] font-semibold underline disabled:cursor-not-allowed disabled:opacity-50 ${styles.link}`}
+            >
+              {actionLabel}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -84,6 +103,7 @@ export default function DoctorSearchField({
   resolvingDoctor = false,
   returnToOrderPath = "",
   onBeforeFacilityProfileNavigate,
+  onUseDefaultDoctor,
   isPersonalPortal = false,
   doctorNotInSystem = false,
   facilityNotInSystem = false,
@@ -129,18 +149,20 @@ export default function DoctorSearchField({
     const trimmedValue = `${value || ""}`.trim();
     const trimmedExtracted = requestedDoctor;
     const facilityLabel = `${facilityName || "this facility"}`.trim();
+    const canUseDefault = typeof onUseDefaultDoctor === "function";
 
     const typedNameMissingOnFacility =
-      isPersonalPortal &&
-      !facilityNotInSystem &&
       trimmedValue.length >= 1 &&
       !specificDoctorIsDefault &&
+      !`${specificDoctorId || ""}`.trim() &&
       !resolvingDoctor &&
       searchSettled &&
       !queryMatchesFacility;
 
     const doctorMissing =
-      doctorNotInSystem || typedNameMissingOnFacility;
+      doctorNotInSystem ||
+      (isPersonalPortal && typedNameMissingOnFacility) ||
+      (!isPersonalPortal && typedNameMissingOnFacility && Boolean(trimmedValue));
 
     if (isPersonalPortal && facilityNotInSystem) {
       return {
@@ -152,17 +174,23 @@ export default function DoctorSearchField({
       };
     }
 
-    if (isPersonalPortal && doctorMissing && (trimmedExtracted || trimmedValue)) {
+    if (doctorMissing && (trimmedExtracted || trimmedValue)) {
       const missingName =
         typedNameMissingOnFacility && trimmedValue
           ? trimmedValue
           : trimmedExtracted || trimmedValue;
       return {
         tone: "warning",
-        title: "Specific doctor not in facility",
-        message: `${missingName} is not on ${facilityLabel} yet (this facility has no matching doctor).`,
+        title: isPersonalPortal
+          ? "Specific doctor not in facility"
+          : "Doctor not on this facility yet",
+        message: isPersonalPortal
+          ? `${missingName} is not on ${facilityLabel} yet (this facility has no matching doctor).`
+          : `${missingName} is not linked to ${facilityLabel}. Add them on the facility profile, or use the facility default doctor.`,
         linkHref: facilityDoctorsHref,
         linkLabel: "Add this doctor to facility",
+        actionLabel: canUseDefault ? "Use facility default doctor" : "",
+        onAction: onUseDefaultDoctor,
       };
     }
 
@@ -174,16 +202,33 @@ export default function DoctorSearchField({
           ? trimmedExtracted
             ? `Requested treating doctor is not on ${facilityLabel}. Add that doctor, or add/select a default doctor, then return here.`
             : `No treating doctor was requested. Add a default doctor on the facility profile, then return here to continue.`
-          : `This facility has no default doctor. Add a doctor on the facility profile, then return here to continue the order.`,
+          : trimmedExtracted || trimmedValue
+            ? `No default doctor is set for ${facilityLabel}. Add the doctor from the subpoena/typing on the facility profile, or add a default doctor there.`
+            : `No doctor is required. You can leave this blank, or add a default doctor on the facility profile to use later.`,
         linkHref: facilityDoctorsHref,
         linkLabel: "Open facility profile to add doctors",
       };
     }
 
     if (!trimmedValue) {
-      if (isPersonalPortal && !trimmedExtracted && !missingDefaultDoctor) {
+      if (!isPersonalPortal) {
+        return trimmedExtracted
+          ? {
+              tone: "info",
+              title: "Doctor optional",
+              message: `Subpoena listed ${trimmedExtracted}. Add that doctor on the facility profile, use the facility default, or leave blank.`,
+              linkHref: facilityDoctorsHref,
+              linkLabel: "Add this doctor to facility",
+              actionLabel: canUseDefault ? "Use facility default doctor" : "",
+              onAction: onUseDefaultDoctor,
+            }
+          : null;
+      }
+
+      if (!trimmedExtracted && !missingDefaultDoctor) {
         return null;
       }
+
       return {
         tone: "warning",
         title: "No doctor selected",
@@ -209,7 +254,7 @@ export default function DoctorSearchField({
         title: "Using facility default doctor",
         message: isPersonalPortal
           ? `${trimmedValue} is the default doctor for ${facilityLabel}. No treating doctor was requested.`
-          : `${trimmedValue} is the default doctor for ${facilityLabel}. No doctor was identified on the subpoena.`,
+          : `${trimmedValue} is the default doctor for ${facilityLabel}.`,
         linkHref: facilityDoctorsHref,
         linkLabel: "Add another doctor",
       };
@@ -292,6 +337,7 @@ export default function DoctorSearchField({
     orderEndedNoFacility,
     searchSettled,
     queryMatchesFacility,
+    onUseDefaultDoctor,
   ]);
 
   useEffect(() => {
@@ -299,10 +345,13 @@ export default function DoctorSearchField({
     const shouldSearch =
       Boolean(facilityId) &&
       query.length >= 1 &&
-      (open || (isPersonalPortal && !facilityNotInSystem && !specificDoctorIsDefault));
+      (open ||
+        (!specificDoctorIsDefault &&
+          !facilityNotInSystem &&
+          (isPersonalPortal || !`${specificDoctorId || ""}`.trim())));
 
     if (!shouldSearch) {
-      if (!isPersonalPortal || !query.length) {
+      if (!query.length) {
         setSuggestions([]);
         setLoading(false);
         setSearchError("");
@@ -352,6 +401,7 @@ export default function DoctorSearchField({
     isPersonalPortal,
     facilityNotInSystem,
     specificDoctorIsDefault,
+    specificDoctorId,
   ]);
 
   useEffect(() => {
@@ -417,6 +467,9 @@ export default function DoctorSearchField({
           linkHref={statusNote.linkHref}
           linkLabel={statusNote.linkLabel}
           onLinkClick={onBeforeFacilityProfileNavigate}
+          actionLabel={statusNote.actionLabel}
+          onAction={statusNote.onAction}
+          actionDisabled={resolvingDoctor}
         />
       ) : null}
 
@@ -457,7 +510,7 @@ export default function DoctorSearchField({
 
           {!loading && !searchError && suggestions.length === 0 && (
             <li className="px-3 py-2 text-[12px] text-[#94A3B8]">
-              {isPersonalPortal && facilityDoctorsHref ? (
+              {facilityDoctorsHref ? (
                 <>
                   No matching doctors —{" "}
                   <Link
@@ -468,11 +521,26 @@ export default function DoctorSearchField({
                   >
                     Add this doctor to facility
                   </Link>
+                  {!isPersonalPortal && onUseDefaultDoctor ? (
+                    <>
+                      {" "}
+                      or{" "}
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setOpen(false);
+                          onUseDefaultDoctor();
+                        }}
+                        className="font-semibold text-[#007F96] underline"
+                      >
+                        use default
+                      </button>
+                    </>
+                  ) : null}
                 </>
-              ) : isPersonalPortal ? (
-                "No matching doctors — use Add this doctor to facility above"
               ) : (
-                "No matching doctors — continue typing to add a new one"
+                "No matching doctors"
               )}
             </li>
           )}

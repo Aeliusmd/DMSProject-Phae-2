@@ -22,8 +22,6 @@ export const immediateRequiredFields = [
   "firstName",
   "lastName",
   "serveCompanyName",
-  "email",
-  "specificDoctor",
 ];
 
 export const personalImmediateRequiredFields = [
@@ -255,9 +253,8 @@ export function validateNewOrderForm(data, fileErrors = {}) {
     }
   }
 
-  if (!data.specificDoctor?.trim()) {
-    errors.specificDoctor = "Specific doctor is required";
-  } else {
+  // Specific doctor is optional on standard new/edit orders.
+  if (data.specificDoctor?.trim()) {
     const doctorError = validateOrganizationName(data.specificDoctor, {
       fieldLabel: "Specific doctor",
     });

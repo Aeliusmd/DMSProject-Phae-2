@@ -322,9 +322,8 @@ function validateOrderPayload(body = {}, options = {}) {
     }
   }
 
-  if (isBlank(body.specificDoctor)) {
-    errors.push({ field: "specificDoctor", message: "Specific doctor is required" });
-  } else {
+  // Specific doctor is optional on standard new/edit orders.
+  if (!isBlank(body.specificDoctor)) {
     addMaxLengthError(
       errors,
       "specificDoctor",

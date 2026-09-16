@@ -115,11 +115,6 @@ const REQUIRED_FIELD_RULES = [
     check: (data) => Boolean(`${data.serveCompanyName || ""}`.trim()),
   },
   {
-    key: "specificDoctor",
-    label: "Specific doctor",
-    check: (data) => Boolean(`${data.specificDoctor || ""}`.trim()),
-  },
-  {
     key: "injury",
     label: "Injury date",
     check: (data) => {

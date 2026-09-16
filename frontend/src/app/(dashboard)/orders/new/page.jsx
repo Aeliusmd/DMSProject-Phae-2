@@ -318,6 +318,7 @@ function NewOrderPageContent() {
   const committedFacilityRef = useRef({ id: "", name: "" });
   const draftRestoredRef = useRef(false);
   const restoredDraftScopeRef = useRef("");
+  const prevDraftScopeRef = useRef(draftScope);
 
   useEffect(() => {
     formDataRef.current = formData;
@@ -639,6 +640,9 @@ function NewOrderPageContent() {
   useEffect(() => {
     let active = true;
 
+    const scopeChanged = prevDraftScopeRef.current !== draftScope;
+    prevDraftScopeRef.current = draftScope;
+
     if (
       isEditMode &&
       restoredDraftScopeRef.current === draftScope &&
@@ -650,12 +654,24 @@ function NewOrderPageContent() {
     }
 
     if (!isEditMode || !orderId) {
-      if (!subpoenaId && !draftRestoredRef.current) {
-        const returningFromFacilityOrDoctor =
-          facilityRefresh === "1" ||
-          Boolean(applyFacilityId) ||
-          Boolean(applyDoctorId);
+      const returningFromFacilityOrDoctor =
+        facilityRefresh === "1" ||
+        Boolean(applyFacilityId) ||
+        Boolean(applyDoctorId);
 
+      // Soft-nav from edit/subpoena → blank New Order keeps React state.
+      // Drop the prior restore flag so the form resets instead of leaking.
+      if (
+        scopeChanged &&
+        draftScope === "new" &&
+        !subpoenaId &&
+        !returningFromFacilityOrDoctor
+      ) {
+        draftRestoredRef.current = false;
+        restoredDraftScopeRef.current = "";
+      }
+
+      if (!subpoenaId && !draftRestoredRef.current) {
         // Only restore an in-progress draft when returning from facility/doctor
         // create/edit. Opening New Order from the nav must start fresh.
         if (
@@ -687,6 +703,13 @@ function NewOrderPageContent() {
             providerName: "",
             providerCreated: false,
           });
+          setFacilityProfileIncomplete(false);
+          setFacilityCreated(false);
+          setMissingDefaultDoctor(false);
+          setDoctorCreated(false);
+          setEditSubpoenaSrc("");
+          setEditSubpoenaError("");
+          clearCommittedFacility();
           clearDraftOrderSession(draftScope);
         }
       }
@@ -940,7 +963,7 @@ function NewOrderPageContent() {
                         ? requestedDoctor || nextForm.specificDoctor || ""
                         : "",
                       extractedDoctorName: isPersonalPortal ? requestedDoctor : "",
-                      allowCreate: !isPersonalPortal,
+                      allowCreate: false,
                       useDefaultWhenMissing: isPersonalPortal ? !requestedDoctor : true,
                     };
               const doctorResolved = await resolvePendingDoctorForOrder({
@@ -1420,12 +1443,14 @@ function NewOrderPageContent() {
             doctorName,
             extractedDoctorName: nextMeta.extractedDoctorName,
             priorDoctorCreated: Boolean(nextMeta.doctorCreated),
+            allowCreate: false,
           });
           nextUpdates = {
             ...nextUpdates,
             specificDoctor: doctorResolved.specificDoctor,
             specificDoctorId: doctorResolved.specificDoctorId,
             specificDoctorIsDefault: doctorResolved.specificDoctorIsDefault,
+            doctorNotInSystem: Boolean(doctorResolved.doctorMissing),
           };
           setMissingDefaultDoctor(doctorResolved.missingDefaultDoctor);
           setDoctorCreated(doctorResolved.doctorCreated);
@@ -1521,18 +1546,22 @@ function NewOrderPageContent() {
     }`.trim();
     const doctorName = `${options.doctorName ?? data.specificDoctor ?? ""}`.trim();
     const extractedDoctorName = `${options.extractedDoctorName ?? ""}`.trim();
-    const nameToResolve = options.resetForFacilityChange
+    const useDefaultOnly = Boolean(options.useDefaultOnly);
+    const nameToResolve = useDefaultOnly
       ? ""
-      : options.useTypedDoctorOnly
-        ? doctorName
-        : isPersonalPortal
-          ? requestedDoctor || doctorName
-          : doctorName || extractedDoctorName;
+      : options.resetForFacilityChange
+        ? ""
+        : options.useTypedDoctorOnly
+          ? doctorName
+          : isPersonalPortal
+            ? requestedDoctor || doctorName
+            : doctorName || extractedDoctorName;
 
     // Personal + requested/typed doctor: never fall through to a fake "present"
     // match; resolve with allowCreate false and surface doctorMissing.
     const personalHasDoctorHint = Boolean(
       isPersonalPortal &&
+        !useDefaultOnly &&
         (options.useTypedDoctorOnly
           ? doctorName
           : requestedDoctor || doctorName)
@@ -1543,21 +1572,31 @@ function NewOrderPageContent() {
     try {
       const resolved = await resolvePendingDoctorForOrder({
         facilityId,
-        doctorId: options.resetForFacilityChange ? "" : data.specificDoctorId || "",
+        doctorId:
+          useDefaultOnly || options.resetForFacilityChange
+            ? ""
+            : data.specificDoctorId || "",
         doctorName: nameToResolve,
-        extractedDoctorName: options.resetForFacilityChange
-          ? ""
-          : isPersonalPortal
-            ? requestedDoctor || doctorName
-            : extractedDoctorName ||
-              extractionMetaRef.current?.extractedDoctorName,
-        priorDoctorCreated: options.resetForFacilityChange
-          ? false
-          : Boolean(extractionMetaRef.current?.doctorCreated),
-        allowCreate: !isPersonalPortal,
-        useDefaultWhenMissing: isPersonalPortal
-          ? !personalHasDoctorHint
-          : undefined,
+        extractedDoctorName:
+          useDefaultOnly || options.resetForFacilityChange
+            ? ""
+            : isPersonalPortal
+              ? requestedDoctor || doctorName
+              : extractedDoctorName ||
+                extractionMetaRef.current?.extractedDoctorName,
+        priorDoctorCreated:
+          useDefaultOnly || options.resetForFacilityChange
+            ? false
+            : Boolean(extractionMetaRef.current?.doctorCreated),
+        allowCreate: false,
+        useDefaultWhenMissing: useDefaultOnly
+          ? true
+          : options.resetForFacilityChange
+            ? true
+            : isPersonalPortal
+              ? !personalHasDoctorHint
+              : // Standard orders: doctor is optional — only apply default when asked.
+                false,
       });
 
       setFormData((prev) => ({
@@ -1571,7 +1610,9 @@ function NewOrderPageContent() {
       }));
       setMissingDefaultDoctor(Boolean(resolved.missingDefaultDoctor));
       setDoctorCreated(
-        options.resetForFacilityChange ? false : resolved.doctorCreated
+        useDefaultOnly || options.resetForFacilityChange
+          ? false
+          : resolved.doctorCreated
       );
 
       return resolved;
@@ -1945,15 +1986,38 @@ function NewOrderPageContent() {
   const handleDoctorBlur = (e) => {
     handleBlur(e);
     const data = formDataRef.current;
-    if (data.creationSource !== "personal_portal") return;
-
     const typedDoctor = `${data.specificDoctor || ""}`.trim();
     const facilityId = `${data.facility || ""}`.trim();
-    if (!typedDoctor || !facilityId) return;
+    if (!facilityId) return;
+
+    // Empty doctor is allowed on standard orders — clear link flags.
+    if (!typedDoctor) {
+      if (data.creationSource === "personal_portal") return;
+      setFormData((prev) => ({
+        ...prev,
+        specificDoctorId: "",
+        specificDoctorIsDefault: false,
+        doctorNotInSystem: false,
+      }));
+      setMissingDefaultDoctor(false);
+      setDoctorCreated(false);
+      return;
+    }
 
     syncDoctorFromForm(data, {
       doctorName: typedDoctor,
       useTypedDoctorOnly: true,
+    });
+  };
+
+  const handleUseDefaultDoctor = async () => {
+    if (isOrderReadOnly) return;
+    const data = formDataRef.current;
+    if (!`${data.facility || ""}`.trim()) return;
+
+    await syncDoctorFromForm(data, {
+      useDefaultOnly: true,
+      extractedDoctorName: "",
     });
   };
 
@@ -2113,16 +2177,27 @@ function NewOrderPageContent() {
       return;
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      [fieldName]: file,
-      ...(fieldName === "subpoenaFile" && !file
-        ? { subpoenaExtractId: "" }
-        : {}),
-      ...(fieldName === "subpoenaFile" && file && !isEditMode
-        ? { subpoenaExtractId: "" }
-        : {}),
-    }));
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        [fieldName]: file,
+      };
+
+      if (fieldName === "subpoenaFile") {
+        // Drop prior extract fields so a replacement PDF cannot leave stale
+        // patient/facility values when the new extract omits them.
+        for (const key of SUBPOENA_EXTRACTED_FIELD_KEYS) {
+          if (Object.prototype.hasOwnProperty.call(initialFormData, key)) {
+            next[key] = initialFormData[key];
+          }
+        }
+        next.subpoenaExtractId = "";
+        next.subpoenaUrl = "";
+        next.subpoenaStoragePath = null;
+      }
+
+      return next;
+    });
 
     setFileErrors((prev) => ({
       ...prev,
@@ -2137,13 +2212,18 @@ function NewOrderPageContent() {
     if (fieldName === "subpoenaFile" && file && !error) {
       setEditSubpoenaSrc("");
       setEditSubpoenaError("");
-      setExpandedPanels((prev) => ({
-        ...prev,
-        subpoena: true,
-      }));
-    }
-
-    if (fieldName === "subpoenaFile" && file && !error && !isEditMode) {
+      setExtractionMeta({
+        facilityName: "",
+        facilityCreated: false,
+        extractedDoctorName: "",
+        providerName: "",
+        providerCreated: false,
+      });
+      setFacilityProfileIncomplete(false);
+      setFacilityCreated(false);
+      setMissingDefaultDoctor(false);
+      setDoctorCreated(false);
+      clearCommittedFacility();
       setExpandedPanels((prev) => ({
         ...prev,
         subpoena: true,
@@ -2342,23 +2422,23 @@ function NewOrderPageContent() {
       return;
     }
 
+    const pendingDoctorName = `${
+      resolvedFacility?.doctorResolved?.specificDoctor ??
+      formDataRef.current.specificDoctor ??
+      ""
+    }`.trim();
+    const pendingDoctorMissing = Boolean(
+      resolvedFacility?.doctorResolved?.doctorMissing ||
+        formDataRef.current.doctorNotInSystem
+    );
+
     if (
       formDataRef.current.creationSource !== "personal_portal" &&
-      resolvedFacility?.doctorResolved?.missingDefaultDoctor &&
-      !(
-        Boolean(
-          `${
-            formDataRef.current.requestedTreatingDoctor ||
-            formDataRef.current.newFacilityRequest?.treatingDoctor ||
-            ""
-          }`.trim()
-        ) &&
-        (formDataRef.current.specificDoctorIsDefault ||
-          `${formDataRef.current.specificDoctorId || ""}`.trim())
-      )
+      pendingDoctorName &&
+      pendingDoctorMissing
     ) {
       setSaveError(
-        "Add a default doctor for this facility before saving this order."
+        `“${pendingDoctorName}” is not linked to this facility. Add them on the facility profile, use the facility default doctor, or clear Specific Doctor (it is optional).`
       );
       return;
     }
@@ -2666,6 +2746,7 @@ function NewOrderPageContent() {
                 resolvingDoctor={resolvingDoctor}
                 returnToOrderPath={returnToOrderPath}
                 onBeforeFacilityProfileNavigate={persistOrderDraft}
+                onUseDefaultDoctor={handleUseDefaultDoctor}
                 readOnly={isOrderReadOnly}
                 isPersonalPortal={formData.creationSource === "personal_portal"}
                 onDoctorBlur={handleDoctorBlur}
@@ -2724,8 +2805,6 @@ function NewOrderPageContent() {
               saving ||
               (formData.creationSource !== "personal_portal" &&
                 facilityProfileIncomplete) ||
-              (formData.creationSource !== "personal_portal" &&
-                missingDefaultDoctor) ||
               personalDoctorBlocksUpdate ||
               resolvingFacility ||
               resolvingDoctor
@@ -3308,6 +3387,7 @@ function ServeInfoForm({
   resolvingDoctor = false,
   returnToOrderPath = "",
   onBeforeFacilityProfileNavigate,
+  onUseDefaultDoctor,
   readOnly = false,
   isPersonalPortal = false,
   onDoctorBlur,
@@ -3582,14 +3662,12 @@ function ServeInfoForm({
         onChange={onChange}
         onBlur={onBlur}
         onDoctorBlur={onDoctorBlur}
-        required
-        placeholder="Doctor name"
+        required={isPersonalPortal}
+        placeholder="Doctor name (optional)"
         error={
           getError("specificDoctor") ||
-          (missingDefaultDoctor
-            ? isPersonalPortal
-              ? "Add a default doctor to continue"
-              : "Add a default doctor to continue"
+          (isPersonalPortal && missingDefaultDoctor
+            ? "Add a default doctor to continue"
             : "")
         }
         missingDefaultDoctor={missingDefaultDoctor}
@@ -3597,6 +3675,9 @@ function ServeInfoForm({
         resolvingDoctor={resolvingDoctor}
         returnToOrderPath={returnToOrderPath}
         onBeforeFacilityProfileNavigate={onBeforeFacilityProfileNavigate}
+        onUseDefaultDoctor={
+          readOnly || isPersonalPortal ? undefined : onUseDefaultDoctor
+        }
         isPersonalPortal={isPersonalPortal}
         doctorNotInSystem={Boolean(formData.doctorNotInSystem)}
         facilityNotInSystem={Boolean(formData.facilityNotInSystem)}

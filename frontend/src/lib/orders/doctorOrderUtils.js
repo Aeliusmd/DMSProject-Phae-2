@@ -101,7 +101,8 @@ export async function resolvePendingDoctorForOrder({
   doctorName = "",
   extractedDoctorName = "",
   priorDoctorCreated = false,
-  allowCreate = true,
+  // Order form never auto-creates; user adds via facility profile or uses default.
+  allowCreate = false,
   useDefaultWhenMissing,
 } = {}) {
   return mapResolvedDoctorFields(
@@ -153,8 +154,8 @@ export function buildDoctorResolveAfterFacilityReturn({
     doctorName,
     extractedDoctorName: isPersonalPortal ? requestedDoctor : extractedDoctorName,
     priorDoctorCreated: Boolean(extractionMeta.doctorCreated),
-    allowCreate: !isPersonalPortal,
-    useDefaultWhenMissing: isPersonalPortal ? !personalHasDoctorHint : true,
+    allowCreate: false,
+    useDefaultWhenMissing: isPersonalPortal ? !personalHasDoctorHint : !doctorName,
   };
 }
 

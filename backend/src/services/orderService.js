@@ -2589,9 +2589,21 @@ function assertFacilityProfileComplete(facility) {
 }
 
 async function assertDoctorBelongsToFacility(facilityId, doctorName) {
+  const trimmedName = trimOrNull(doctorName);
+  if (!trimmedName) {
+    return {
+      doctor: null,
+      doctorName: null,
+      usedDefault: false,
+      created: false,
+      missingDefault: false,
+      doctorMissing: false,
+    };
+  }
+
   const facilityService = require("./facilityService");
   const resolved = await facilityService.resolveFacilityDoctor(facilityId, {
-    doctorName,
+    doctorName: trimmedName,
     useDefaultWhenMissing: false,
     allowCreate: false,
   });
@@ -2600,7 +2612,8 @@ async function assertDoctorBelongsToFacility(facilityId, doctorName) {
     throw new ApiError(400, "Validation failed", [
       {
         field: "specificDoctor",
-        message: "Select a doctor linked to the selected facility",
+        message:
+          "Select a doctor linked to the selected facility, use the facility default, or clear Specific Doctor",
       },
     ]);
   }
@@ -2690,8 +2703,10 @@ async function createOrder(data, actorId, files, options = {}) {
         resolvedFacilityId,
         orderInput.specificDoctor
       );
-      orderInput.specificDoctor = doctor.doctorName;
-      orderInput.specificDoctorIsDefault = Boolean(doctor.usedDefault);
+      orderInput.specificDoctor = doctor.doctorName || null;
+      orderInput.specificDoctorIsDefault = Boolean(
+        doctor.doctorName && doctor.usedDefault
+      );
     }
 
     const subpoenaExtractId = Number(orderInput.subpoenaExtractId) || null;
@@ -3210,8 +3225,10 @@ async function updateOrder(id, data, actorId, files) {
         resolvedFacilityId,
         data.specificDoctor
       );
-      data.specificDoctor = doctor.doctorName;
-      data.specificDoctorIsDefault = Boolean(doctor.usedDefault);
+      data.specificDoctor = doctor.doctorName || null;
+      data.specificDoctorIsDefault = Boolean(
+        doctor.doctorName && doctor.usedDefault
+      );
     }
 
     const rawOrderNumber = trimOrNull(data.orderNumber);
@@ -3219,17 +3236,49 @@ async function updateOrder(id, data, actorId, files) {
       throw new ApiError(400, "Order number is required");
     }
 
-    const orderNumber = await resolveOrderNumber(rawOrderNumber, existing.id);
+    const subpoenaExtractId = Number(data.subpoenaExtractId) || null;
+    const orderNumber = await resolveOrderNumber(rawOrderNumber, existing.id, {
+      extractId: subpoenaExtractId,
+    });
     const payments = collectPayments(data);
 
     const subpoenaFile = getUploadedFile(files, "subpoenaFile");
     const additionalDocFile = getUploadedFile(files, "additionalDocumentFile");
-    const newSubpoenaPath = toRelativeStoragePath(subpoenaFile);
-    const subpoenaStoragePath =
-      newSubpoenaPath || existing.subpoena_storage_path || null;
+
+    let linkedExtract = null;
+    let subpoenaStoragePath = null;
+    if (subpoenaExtractId) {
+      linkedExtract = await batchScanRepository.getExtractById(subpoenaExtractId);
+      if (!linkedExtract) {
+        throw new ApiError(400, "Subpoena extract not found");
+      }
+      if (
+        linkedExtract.is_processed &&
+        Number(linkedExtract.order_id) !== Number(existing.id)
+      ) {
+        throw new ApiError(
+          409,
+          "This subpoena extract was already processed into an order"
+        );
+      }
+      try {
+        subpoenaStoragePath = fileStorage.archiveBatchScanSubpoenaToProcessed(
+          linkedExtract.storage_path,
+          orderNumber
+        );
+      } catch (error) {
+        throw new ApiError(404, error.message || "Subpoena PDF not found");
+      }
+    } else {
+      const newSubpoenaPath = toRelativeStoragePath(subpoenaFile);
+      subpoenaStoragePath =
+        newSubpoenaPath || existing.subpoena_storage_path || null;
+    }
 
     const providerId = await resolveProviderId(connection, data);
-    const payload = buildOrderDbPayload({ ...data, providerId });
+    const payload = buildOrderDbPayload(
+      applyInjuryFromExtract({ ...data, providerId }, linkedExtract)
+    );
     // Editing an auto-created order completes it; it must not convert the
     // source to manual or lose its Processed/Unprocessed classification.
     payload.creationSource = existing.creation_source || "manual";
@@ -3253,6 +3302,17 @@ async function updateOrder(id, data, actorId, files) {
       hasSubpoena: orderFlags.hasSubpoena,
       orderNumber,
     });
+
+    if (
+      subpoenaExtractId &&
+      linkedExtract &&
+      !linkedExtract.is_processed
+    ) {
+      await batchScanRepository.linkExtractToOrder(connection, {
+        extractId: subpoenaExtractId,
+        orderId: existing.id,
+      });
+    }
 
     await OrderRecord.syncForOrder(
       connection,
