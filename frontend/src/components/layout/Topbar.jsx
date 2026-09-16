@@ -196,20 +196,16 @@ function MailboxIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
       <path
-        d="M4 8.5h11a3.5 3.5 0 0 1 3.5 3.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8.5Z"
+        d="M4 6.5h16a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18V8A1.5 1.5 0 0 1 4 6.5Z"
         stroke="currentColor"
         strokeWidth="1.7"
       />
       <path
-        d="M4 10.5V8a2 2 0 0 1 2-2h7"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M15 12h3.5"
+        d="m3.5 8 8.5 6 8.5-6"
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
