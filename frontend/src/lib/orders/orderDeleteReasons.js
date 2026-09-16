@@ -9,7 +9,6 @@ export const PREDEFINED_DELETE_REASONS = [
   "Customer Requested Cancellation",
   "Order No Longer Required",
   "Duplicate Subpoena",
-  "Order Created for Testing",
   DELETE_REASON_OTHER,
 ];
 
