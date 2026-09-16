@@ -20,6 +20,7 @@ const paymentRoutes = require("./paymentRoutes");
 const publicRoutes = require("./publicRoutes");
 const companyOrdersRoutes = require("./companyOrdersRoutes");
 const staffPersonalOrderRoutes = require("./staffPersonalOrderRoutes");
+const orderNoteTagRoutes = require("./orderNoteTagRoutes");
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.use("/personal-portal/auth", personalPortalAuthRoutes);
 router.use("/personal-portal", personalPortalRequestRoutes);
 router.use("/orders", orderRoutes);
 router.use("/personal-orders", staffPersonalOrderRoutes);
+router.use("/order-note-tags", orderNoteTagRoutes);
 router.use("/providers", providerRoutes);
 router.use("/facilities", facilityRoutes);
 router.use("/employees", employeeRoutes);

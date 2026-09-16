@@ -584,7 +584,7 @@ exports.createNote = asyncHandler(async (req, res) => {
     req.body,
     req.user.id,
     req.file,
-    { timezone: req.clientTimezone }
+    { timezone: req.clientTimezone, actorRole: req.user.role }
   );
 
   await logOrderActivity(req, order, {

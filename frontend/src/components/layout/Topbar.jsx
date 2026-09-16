@@ -1,19 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import NotificationsModal from "@/components/layout/NotificationsModal";
 import { getStoredUser } from "@/lib/auth/authStorage";
+import { isEmployee, isManager } from "@/lib/auth/roles";
 import { getNotifications } from "@/lib/notifications/notificationsApi";
+import { getTaggedNotesUnreadCount } from "@/lib/orders/orderNoteTagApi";
 
 export default function Topbar({ onToggleSidebar, sidebarExpanded = false }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [taggedUnreadCount, setTaggedUnreadCount] = useState(0);
   const notificationButtonRef = useRef(null);
 
   const user = getStoredUser();
   const displayName = user?.name || "User";
   const initials = getInitials(displayName);
+  const showTaggedNotesMailbox = isEmployee(user) || isManager(user);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -26,12 +31,30 @@ export default function Topbar({ onToggleSidebar, sidebarExpanded = false }) {
     }
   }, []);
 
+  const loadTaggedUnread = useCallback(async () => {
+    if (!showTaggedNotesMailbox) {
+      setTaggedUnreadCount(0);
+      return;
+    }
+
+    try {
+      const count = await getTaggedNotesUnreadCount();
+      setTaggedUnreadCount(count);
+    } catch {
+      setTaggedUnreadCount(0);
+    }
+  }, [showTaggedNotesMailbox]);
+
   useEffect(() => {
     loadNotifications();
+    loadTaggedUnread();
 
-    const interval = setInterval(loadNotifications, 60000);
+    const interval = setInterval(() => {
+      loadNotifications();
+      loadTaggedUnread();
+    }, 60000);
     return () => clearInterval(interval);
-  }, [loadNotifications]);
+  }, [loadNotifications, loadTaggedUnread]);
 
   return (
     <header className="z-30 flex min-h-[52px] shrink-0 items-center gap-2 border-b border-[#E2E8F0] bg-white px-2 py-2 sm:gap-3 sm:px-[18px]">
@@ -86,6 +109,28 @@ export default function Topbar({ onToggleSidebar, sidebarExpanded = false }) {
             onRefresh={loadNotifications}
           />
         </div>
+
+        {showTaggedNotesMailbox ? (
+          <Link
+            href="/tagged-notes"
+            className={`relative flex h-[30px] w-[30px] items-center justify-center rounded-[6px] hover:bg-[#F8FAFC] ${
+              taggedUnreadCount > 0 ? "text-[#0369A1]" : "text-[#64748B]"
+            }`}
+            aria-label={
+              taggedUnreadCount > 0
+                ? `Open tagged notes, ${taggedUnreadCount} unseen`
+                : "Open tagged notes"
+            }
+            title="Tagged notes"
+          >
+            <MailboxIcon />
+            {taggedUnreadCount > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex min-h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#DC2626] px-1 text-[9px] font-bold leading-none text-white">
+                {taggedUnreadCount > 99 ? "99+" : taggedUnreadCount}
+              </span>
+            ) : null}
+          </Link>
+        ) : null}
 
         <button
           type="button"
@@ -142,6 +187,29 @@ function BellIcon() {
         d="M10 19a2 2 0 0 0 4 0"
         stroke="currentColor"
         strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function MailboxIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 8.5h11a3.5 3.5 0 0 1 3.5 3.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M4 10.5V8a2 2 0 0 1 2-2h7"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M15 12h3.5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
       />
     </svg>
   );

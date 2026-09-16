@@ -2138,7 +2138,7 @@ async function addOrderNote(orderId, data, actorId, file, options = {}) {
   );
   const timeZone = options.timezone || config.businessTimezone;
 
-  await Order.createNote({
+  const noteId = await Order.createNote({
     orderId: order.id,
     createdBy: actorId || null,
     authorName,
@@ -2147,6 +2147,22 @@ async function addOrderNote(orderId, data, actorId, file, options = {}) {
     attachmentPath: toRelativeStoragePath(file),
     isCalled: 0,
   });
+
+  // Optional admin-only tagging — never blocks or changes core note creation.
+  try {
+    const orderNoteTagService = require("./orderNoteTagService");
+    const taggedEmployeeIds = orderNoteTagService.parseTaggedEmployeeIds(data);
+    if (taggedEmployeeIds.length) {
+      await orderNoteTagService.attachTagsToNote({
+        noteId,
+        taggedEmployeeIds,
+        taggedBy: actorId || null,
+        actorRole: options.actorRole || null,
+      });
+    }
+  } catch (_tagError) {
+    // Tagging is additive; note already saved successfully.
+  }
 
   await addOrderActivityLog({
     orderId: order.id,

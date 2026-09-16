@@ -285,7 +285,10 @@ export async function getOrderNotesPaginated(
   };
 }
 
-export async function createOrderNote(id, { note, callbackDate, attachment }) {
+export async function createOrderNote(
+  id,
+  { note, callbackDate, attachment, taggedEmployeeIds = [] }
+) {
   const formData = new FormData();
   formData.append("note", note ?? "");
 
@@ -295,6 +298,10 @@ export async function createOrderNote(id, { note, callbackDate, attachment }) {
 
   if (attachment) {
     formData.append("attachment", attachment);
+  }
+
+  if (Array.isArray(taggedEmployeeIds) && taggedEmployeeIds.length > 0) {
+    formData.append("taggedEmployeeIds", JSON.stringify(taggedEmployeeIds));
   }
 
   const data = await request(`/orders/${id}/notes`, {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import useIsClient from "@/hooks/useIsClient";
 import { createOrderNote } from "@/lib/orders/orderApi";
+import { getTaggableStaff } from "@/lib/orders/orderNoteTagApi";
 import {
   getNoteAttachmentError,
   validateNoteForm,
@@ -11,14 +12,24 @@ import {
 import OrderNoteFormFields from "@/components/orders/OrderNoteFormFields";
 import { getMinFutureDateTimeLocal } from "@/lib/utils/dateUtils";
 import { applyApiFieldErrors, getApiErrorMessage, hasValidationErrors } from "@/lib/apiErrorUtils";
+import { getStoredUser } from "@/lib/auth/authStorage";
+import { isAdmin } from "@/lib/auth/roles";
 
 export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
   const mounted = useIsClient();
+  const user = getStoredUser();
+  const canTagWorkers = isAdmin(user);
   const [noteText, setNoteText] = useState("");
   const [callbackDate, setCallbackDate] = useState("");
   const [attachment, setAttachment] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [showTagPicker, setShowTagPicker] = useState(false);
+  const [staffOptions, setStaffOptions] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState("");
+  const [staffSearch, setStaffSearch] = useState("");
+  const [selectedWorkers, setSelectedWorkers] = useState([]);
 
   const orderId = order?.dbId ?? order?.id ?? null;
 
@@ -28,6 +39,11 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
     setCallbackDate("");
     setAttachment(null);
     setErrors({});
+    setShowTagPicker(false);
+    setStaffOptions([]);
+    setStaffError("");
+    setStaffSearch("");
+    setSelectedWorkers([]);
   }, [isOpen, orderId]);
 
   useEffect(() => {
@@ -38,6 +54,32 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
       document.body.style.overflow = originalOverflow;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !showTagPicker || !canTagWorkers) return;
+
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      setStaffLoading(true);
+      setStaffError("");
+      try {
+        const staff = await getTaggableStaff({ search: staffSearch.trim() });
+        if (!cancelled) setStaffOptions(staff);
+      } catch (err) {
+        if (!cancelled) {
+          setStaffOptions([]);
+          setStaffError(getApiErrorMessage(err, "Failed to load workers"));
+        }
+      } finally {
+        if (!cancelled) setStaffLoading(false);
+      }
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [isOpen, showTagPicker, canTagWorkers, staffSearch]);
 
   const noteValidationErrors = useMemo(
     () =>
@@ -50,6 +92,11 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
   );
 
   const isNoteInvalid = hasValidationErrors(noteValidationErrors);
+
+  const selectedWorkerIds = useMemo(
+    () => selectedWorkers.map((worker) => Number(worker.id)),
+    [selectedWorkers]
+  );
 
   if (!mounted || !isOpen || !order) return null;
 
@@ -80,6 +127,16 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
     clearError("attachment");
   };
 
+  const toggleWorker = (worker) => {
+    const id = Number(worker.id);
+    setSelectedWorkers((prev) => {
+      if (prev.some((item) => Number(item.id) === id)) {
+        return prev.filter((item) => Number(item.id) !== id);
+      }
+      return [...prev, worker];
+    });
+  };
+
   const handleSave = async () => {
     const nextErrors = validateNoteForm({
       noteText,
@@ -95,6 +152,7 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
         note: noteText.trim(),
         callbackDate,
         attachment,
+        taggedEmployeeIds: canTagWorkers ? selectedWorkerIds : [],
       });
       onSaved?.();
       onClose?.();
@@ -142,6 +200,110 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
             }}
             onAttachmentChange={handleAttachmentChange}
           />
+
+          {canTagWorkers ? (
+            <div className="mt-4 rounded-[8px] border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[12px] font-semibold text-[#334155]">
+                    Tag a worker
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-[#64748B]">
+                    Optional. Tagged workers will see this note in their mailbox.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTagPicker((prev) => !prev)}
+                  className="inline-flex h-[30px] items-center justify-center rounded-[6px] border border-[#BAE6FD] bg-white px-3 text-[11px] font-semibold text-[#0369A1] hover:bg-[#F0F9FF]"
+                >
+                  {showTagPicker ? "Hide workers" : "Tag a worker"}
+                </button>
+              </div>
+
+              {selectedWorkers.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedWorkers.map((worker) => (
+                    <span
+                      key={worker.id}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#BAE6FD] bg-[#F0F9FF] px-2 py-1 text-[10px] font-medium text-[#0369A1]"
+                    >
+                      {worker.name}
+                      <button
+                        type="button"
+                        onClick={() => toggleWorker(worker)}
+                        className="text-[#0284C7] hover:text-[#0C4A6E]"
+                        aria-label={`Remove ${worker.name}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              {showTagPicker ? (
+                <div className="mt-3 rounded-[6px] border border-[#E2E8F0] bg-white p-3">
+                  <input
+                    type="text"
+                    value={staffSearch}
+                    onChange={(event) => setStaffSearch(event.target.value)}
+                    placeholder="Search employees and managers..."
+                    className="h-[34px] w-full rounded-[6px] border border-[#E2E8F0] px-3 text-[12px] text-[#334155] outline-none focus:border-[#007F96] focus:ring-2 focus:ring-[#007F96]/10"
+                  />
+
+                  {staffError ? (
+                    <p className="mt-2 text-[11px] font-medium text-red-500">
+                      {staffError}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-2 max-h-[180px] space-y-1 overflow-y-auto">
+                    {staffLoading ? (
+                      <p className="px-1 py-2 text-[11px] text-[#64748B]">
+                        Loading workers...
+                      </p>
+                    ) : staffOptions.length === 0 ? (
+                      <p className="px-1 py-2 text-[11px] text-[#64748B]">
+                        No workers found.
+                      </p>
+                    ) : (
+                      staffOptions.map((worker) => {
+                        const checked = selectedWorkerIds.includes(
+                          Number(worker.id)
+                        );
+                        return (
+                          <label
+                            key={worker.id}
+                            className="flex cursor-pointer items-center gap-2 rounded-[6px] px-2 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleWorker(worker)}
+                              className="h-[14px] w-[14px] accent-[#0097B2]"
+                            />
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {worker.name}
+                            </span>
+                            <span className="shrink-0 text-[10px] text-[#64748B]">
+                              {worker.role}
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {errors.submit ? (
+            <p className="mt-3 text-[11px] font-medium text-red-500">
+              {errors.submit}
+            </p>
+          ) : null}
 
           <div className="mt-4">
             <button

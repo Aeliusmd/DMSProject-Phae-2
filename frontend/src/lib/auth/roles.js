@@ -12,6 +12,7 @@ const EMPLOYEE_ALLOWED_PATH_PREFIXES = [
   "/facilities",
   "/activity-log",
   "/notifications",
+  "/tagged-notes",
   "/settings",
 ];
 
