@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { validateNoHtmlMarkup } from "@/lib/validations/nameValidation";
+import {
+  DELETE_REASON_OTHER,
+  PREDEFINED_DELETE_REASONS,
+  isOtherDeleteReason,
+  resolveDeleteReason,
+  validateDeleteReasonSelection,
+} from "@/lib/orders/orderDeleteReasons";
 
 export default function OrderDeleteModal({
   open,
@@ -11,16 +17,29 @@ export default function OrderDeleteModal({
   onClose,
   onConfirm,
 }) {
-  const [reason, setReason] = useState("");
+  const [selectedReason, setSelectedReason] = useState("");
+  const [customReason, setCustomReason] = useState("");
   const [step, setStep] = useState("reason");
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState("");
 
-  const isReasonInvalid = useMemo(() => !reason.trim(), [reason]);
+  const resolvedReason = useMemo(
+    () => resolveDeleteReason(selectedReason, customReason),
+    [selectedReason, customReason]
+  );
+
+  const isReasonInvalid = useMemo(() => {
+    if (!selectedReason) return true;
+    if (isOtherDeleteReason(selectedReason)) {
+      return !customReason.trim();
+    }
+    return false;
+  }, [selectedReason, customReason]);
 
   useEffect(() => {
     if (open) {
-      setReason("");
+      setSelectedReason("");
+      setCustomReason("");
       setStep("reason");
       setFieldErrors({});
       setError("");
@@ -42,7 +61,7 @@ export default function OrderDeleteModal({
         onCancel={() => setStep("reason")}
         onConfirm={() => {
           if (loading) return;
-          onConfirm(reason);
+          onConfirm(resolvedReason);
         }}
       />
     );
@@ -52,32 +71,75 @@ export default function OrderDeleteModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-[2px]">
       <section
         className="rounded-[9px] bg-white px-5 py-5 shadow-2xl"
-        style={{ width: "100%", maxWidth: "420px" }}
+        style={{ width: "100%", maxWidth: "460px" }}
       >
         <h2 className="text-[15px] font-semibold text-[#111827]">Delete Order</h2>
         <p className="mt-2 text-[12px] leading-[20px] text-[#475569]">
-          Please provide a reason for deleting order{" "}
+          Please select a reason for deleting order{" "}
           <span className="font-semibold text-[#111827]">{order?.id || ""}</span>.
         </p>
 
-        <textarea
-          value={reason}
-          onChange={(event) => {
-            setReason(event.target.value);
-            setFieldErrors({});
-            if (error) setError("");
-          }}
-          rows={4}
-          placeholder="Enter deletion reason..."
-          className={`mt-4 w-full resize-none rounded-[6px] border px-3 py-2 text-[12px] text-[#334155] outline-none focus:ring-2 ${
-            fieldErrors.reason
-              ? "border-red-500 focus:border-red-500 focus:ring-red-500/10"
-              : "border-[#E2E8F0] focus:border-[#007F96] focus:ring-[#007F96]/10"
+        <div
+          className={`mt-4 max-h-[280px] space-y-2 overflow-y-auto rounded-[6px] border px-3 py-3 ${
+            fieldErrors.selectedReason
+              ? "border-red-500"
+              : "border-[#E2E8F0]"
           }`}
-        />
+        >
+          {PREDEFINED_DELETE_REASONS.map((reasonOption) => (
+            <label
+              key={reasonOption}
+              className="flex cursor-pointer items-start gap-3 rounded-[6px] px-2 py-2 text-[12px] text-[#334155] hover:bg-[#F8FAFC]"
+            >
+              <input
+                type="radio"
+                name="deleteReason"
+                value={reasonOption}
+                checked={selectedReason === reasonOption}
+                onChange={() => {
+                  setSelectedReason(reasonOption);
+                  setFieldErrors({});
+                  if (error) setError("");
+                }}
+                className="mt-[2px] h-[14px] w-[14px] shrink-0 accent-[#DC2626]"
+              />
+              <span className="leading-[18px]">{reasonOption}</span>
+            </label>
+          ))}
+        </div>
 
-        {fieldErrors.reason ? (
-          <p className="mt-2 text-[11px] font-medium text-red-500">{fieldErrors.reason}</p>
+        {fieldErrors.selectedReason ? (
+          <p className="mt-2 text-[11px] font-medium text-red-500">
+            {fieldErrors.selectedReason}
+          </p>
+        ) : null}
+
+        {isOtherDeleteReason(selectedReason) ? (
+          <textarea
+            value={customReason}
+            onChange={(event) => {
+              setCustomReason(event.target.value);
+              setFieldErrors((current) => {
+                const next = { ...current };
+                delete next.customReason;
+                return next;
+              });
+              if (error) setError("");
+            }}
+            rows={3}
+            placeholder="Enter deletion reason..."
+            className={`mt-3 w-full resize-none rounded-[6px] border px-3 py-2 text-[12px] text-[#334155] outline-none focus:ring-2 ${
+              fieldErrors.customReason
+                ? "border-red-500 focus:border-red-500 focus:ring-red-500/10"
+                : "border-[#E2E8F0] focus:border-[#007F96] focus:ring-[#007F96]/10"
+            }`}
+          />
+        ) : null}
+
+        {fieldErrors.customReason ? (
+          <p className="mt-2 text-[11px] font-medium text-red-500">
+            {fieldErrors.customReason}
+          </p>
         ) : null}
 
         {error ? (
@@ -96,17 +158,12 @@ export default function OrderDeleteModal({
           <button
             type="button"
             onClick={() => {
-              if (!reason.trim()) {
-                setFieldErrors({ reason: "Deletion reason is required." });
-                setError("");
-                return;
-              }
-
-              const reasonError = validateNoHtmlMarkup(reason, {
-                fieldLabel: "Deletion reason",
-              });
-              if (reasonError) {
-                setFieldErrors({ reason: reasonError });
+              const validationErrors = validateDeleteReasonSelection(
+                selectedReason,
+                customReason
+              );
+              if (Object.keys(validationErrors).length > 0) {
+                setFieldErrors(validationErrors);
                 setError("");
                 return;
               }
