@@ -2572,14 +2572,7 @@ function NewOrderPageContent() {
     return (
       <DashboardShell lockScroll>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-1">
-          <button
-            type="button"
-            onClick={() => router.push(listBackHref)}
-            className="inline-flex h-[34px] w-fit items-center gap-2 rounded-[6px] border border-[#E2E8F0] bg-white px-3 text-[12px] font-semibold text-[#475569] shadow-sm hover:bg-[#F8FAFC]"
-          >
-            <OrderBackArrowIcon />
-            {listBackLabel}
-          </button>
+          <OrderListBackButton label={listBackLabel} onClick={() => router.push(listBackHref)} />
           <div className="flex flex-1 items-center justify-center">
             <p className="text-[13px] text-[#64748B]">Loading order...</p>
           </div>
@@ -2593,14 +2586,7 @@ function NewOrderPageContent() {
       <DashboardShell lockScroll>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
           <p className="text-[13px] font-semibold text-red-500">{loadError}</p>
-          <button
-            type="button"
-            onClick={handleListBack}
-            className="inline-flex h-[34px] items-center gap-2 rounded-[6px] border border-[#E2E8F0] bg-white px-3 text-[12px] font-semibold text-[#475569] shadow-sm hover:bg-[#F8FAFC]"
-          >
-            <OrderBackArrowIcon />
-            {listBackLabel}
-          </button>
+          <OrderListBackButton label={listBackLabel} onClick={handleListBack} />
         </div>
       </DashboardShell>
     );
@@ -2620,15 +2606,8 @@ function NewOrderPageContent() {
 
         <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <button
-              type="button"
-              onClick={handleListBack}
-              className="mb-2 inline-flex h-[34px] items-center gap-2 rounded-[6px] border border-[#E2E8F0] bg-white px-3 text-[12px] font-semibold text-[#475569] shadow-sm hover:bg-[#F8FAFC]"
-            >
-              <OrderBackArrowIcon />
-              {listBackLabel}
-            </button>
-            <h1 className="text-[18px] font-semibold text-[#111827] sm:text-[20px]">
+            <OrderListBackButton label={listBackLabel} onClick={handleListBack} />
+            <h1 className="mt-2 text-[18px] font-semibold text-[#111827] sm:text-[20px]">
               {isOrderReadOnly
                 ? "View Order"
                 : isEditMode
@@ -4059,13 +4038,30 @@ function Divider() {
   return <div className="h-px w-full bg-[#E2E8F0]" />;
 }
 
+function OrderListBackButton({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group inline-flex items-center gap-2 rounded-[8px] py-1 pr-2.5 text-left transition-colors hover:bg-[#E6F7FA]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0097B2]/30"
+    >
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E6F7FA] text-[#007F96] transition-colors group-hover:bg-[#0097B2] group-hover:text-white">
+        <OrderBackArrowIcon />
+      </span>
+      <span className="text-[12px] font-semibold text-[#007F96] transition-colors group-hover:text-[#00667A]">
+        {label}
+      </span>
+    </button>
+  );
+}
+
 function OrderBackArrowIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M19 12H5M11 6l-6 6 6 6"
         stroke="currentColor"
-        strokeWidth="1.9"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

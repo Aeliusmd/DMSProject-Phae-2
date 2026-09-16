@@ -17,6 +17,11 @@ import {
   isPersonalOrderSource,
   toApiCreationSource,
 } from "@/lib/orders/orderFilterConstants";
+import {
+  ORDER_LIST_FILTER_KEYS,
+  consumeOrderListFilters,
+  writeOrderListFilters,
+} from "@/lib/orders/orderListFilterStorage";
 import { STAFF_PORTAL_ORDERS_HIDDEN } from "@/lib/portalNavigationVisibility";
 
 const RUSH_LEVEL_OPTIONS = [
@@ -34,6 +39,35 @@ const defaultDraftFilters = {
   creationSource: ORDER_SOURCE_INTERNAL,
 };
 
+const defaultAppliedFilters = {
+  ...defaultDraftFilters,
+  search: "",
+};
+
+function toDraftFromApplied(applied = defaultAppliedFilters) {
+  return {
+    facility: applied.facility || "",
+    status: applied.status || "",
+    rushLevel: applied.rushLevel || "",
+    fromDate: applied.fromDate || "",
+    toDate: applied.toDate || "",
+    sortDir: applied.sortDir === "desc" ? "desc" : "asc",
+    creationSource: applied.creationSource || ORDER_SOURCE_INTERNAL,
+  };
+}
+
+function createInitialReportFilterState() {
+  const applied = consumeOrderListFilters(
+    ORDER_LIST_FILTER_KEYS.reports,
+    defaultAppliedFilters
+  );
+  return {
+    applied,
+    draft: toDraftFromApplied(applied),
+    searchDraft: applied.search || "",
+  };
+}
+
 export default function ReportsPage() {
   const user = getStoredUser();
   const showActivityReportLink = canAccessActivityReport(user);
@@ -42,12 +76,10 @@ export default function ReportsPage() {
   const [facilitiesLoading, setFacilitiesLoading] = useState(true);
   const [facilitiesError, setFacilitiesError] = useState("");
 
-  const [draftFilters, setDraftFilters] = useState(defaultDraftFilters);
-  const [searchDraft, setSearchDraft] = useState("");
-  const [appliedFilters, setAppliedFilters] = useState({
-    ...defaultDraftFilters,
-    search: "",
-  });
+  const [initialFilterState] = useState(createInitialReportFilterState);
+  const [draftFilters, setDraftFilters] = useState(initialFilterState.draft);
+  const [searchDraft, setSearchDraft] = useState(initialFilterState.searchDraft);
+  const [appliedFilters, setAppliedFilters] = useState(initialFilterState.applied);
   const [summary, setSummary] = useState({
     total: 0,
     startRecord: 0,
@@ -56,6 +88,14 @@ export default function ReportsPage() {
     totalPages: 1,
     loading: true,
   });
+
+  useEffect(() => {
+    writeOrderListFilters(
+      ORDER_LIST_FILTER_KEYS.reports,
+      appliedFilters,
+      defaultAppliedFilters
+    );
+  }, [appliedFilters]);
 
   const sourceOptions = getOrderSourceOptions({
     hidePortalOrders: STAFF_PORTAL_ORDERS_HIDDEN,

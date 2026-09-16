@@ -7,12 +7,14 @@ export const ORDER_LIST_FILTER_KEYS = {
   orders: "orders",
   personalOrders: "personal-orders",
   companyOrders: "company-orders",
+  reports: "reports",
 };
 
 const RETURN_TO_LIST_KEY = {
   orders: ORDER_LIST_FILTER_KEYS.orders,
   "personal-orders": ORDER_LIST_FILTER_KEYS.personalOrders,
   "company-orders": ORDER_LIST_FILTER_KEYS.companyOrders,
+  reports: ORDER_LIST_FILTER_KEYS.reports,
 };
 
 function ownerKey() {
@@ -181,6 +183,7 @@ export function shouldKeepPendingOrderListFilterRestore(pathname = "") {
     path === "/orders" ||
     path === "/personal-orders" ||
     path === "/company-orders" ||
+    path === "/reports" ||
     path === "/orders/new" ||
     path.startsWith("/orders/new/")
   );
