@@ -495,7 +495,7 @@ exports.remove = asyncHandler(async (req, res) => {
 
   await logOrderActivity(req, order, {
     action: "delete",
-    details: `Deleted order ${order.orderNumber} for ${getOrderLogContext(order).companyName}: ${req.body.reason}`,
+    details: `Deleted order ${order.orderNumber} for ${getOrderLogContext(order).companyName} and deleted reason: ${req.body.reason}`,
   });
 
   await notificationService.notifyOrderStatusChange({
