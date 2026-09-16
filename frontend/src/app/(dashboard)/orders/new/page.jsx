@@ -63,6 +63,7 @@ import {
 } from "@/lib/orders/doctorOrderUtils";
 import { getProviders, updateProvider } from "@/lib/providers/providerApi";
 import { buildFormFromExtract } from "@/lib/orders/extractionFormUtils";
+import { markOrderListFiltersForRestore } from "@/lib/orders/orderListFilterStorage";
 import { syncPaymentDueFields, validateOrderPaymentAmounts } from "@/lib/orders/paymentUtils";
 import { API_BASE_URL } from "@/config/api";
 import { applyApiFieldErrors, getApiErrorMessage } from "@/lib/apiErrorUtils";
@@ -1518,11 +1519,28 @@ function NewOrderPageContent() {
   );
 
   const listBackLabel = useMemo(() => {
-    if (listBackHref === "/personal-orders") return "← Back to Personal Orders";
-    if (listBackHref === "/company-orders") return "← Back to Company Orders";
-    if (listBackHref === "/reports") return "← Back to Reports";
-    return "← Back to Orders";
+    if (listBackHref === "/personal-orders") return "Back to Personal Orders";
+    if (listBackHref === "/company-orders") return "Back to Company Orders";
+    if (listBackHref === "/reports") return "Back to Reports";
+    return "Back to Orders";
   }, [listBackHref]);
+
+  const handleListBack = useCallback(() => {
+    if (isEditMode) {
+      const returnTo =
+        listBackHref === "/personal-orders"
+          ? "personal-orders"
+          : listBackHref === "/company-orders"
+            ? "company-orders"
+            : listBackHref === "/reports"
+              ? "reports"
+              : "orders";
+      markOrderListFiltersForRestore(returnTo);
+    }
+    clearDraftOrderSession(draftScope);
+    draftRestoredRef.current = false;
+    router.push(listBackHref);
+  }, [draftScope, isEditMode, listBackHref, router]);
 
   const personalRequestedDoctor = `${
     formData.requestedTreatingDoctor ||
@@ -2553,8 +2571,18 @@ function NewOrderPageContent() {
   if (isEditMode && loadingOrder) {
     return (
       <DashboardShell lockScroll>
-        <div className="flex min-h-0 flex-1 items-center justify-center">
-          <p className="text-[13px] text-[#64748B]">Loading order...</p>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-1">
+          <button
+            type="button"
+            onClick={() => router.push(listBackHref)}
+            className="inline-flex h-[34px] w-fit items-center gap-2 rounded-[6px] border border-[#E2E8F0] bg-white px-3 text-[12px] font-semibold text-[#475569] shadow-sm hover:bg-[#F8FAFC]"
+          >
+            <OrderBackArrowIcon />
+            {listBackLabel}
+          </button>
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-[13px] text-[#64748B]">Loading order...</p>
+          </div>
         </div>
       </DashboardShell>
     );
@@ -2567,14 +2595,11 @@ function NewOrderPageContent() {
           <p className="text-[13px] font-semibold text-red-500">{loadError}</p>
           <button
             type="button"
-            onClick={() => router.push(resolveListPath(formData.creationSource))}
-            className="rounded-[6px] bg-[#0097B2] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#0086A0]"
+            onClick={handleListBack}
+            className="inline-flex h-[34px] items-center gap-2 rounded-[6px] border border-[#E2E8F0] bg-white px-3 text-[12px] font-semibold text-[#475569] shadow-sm hover:bg-[#F8FAFC]"
           >
-            {resolveListPath(formData.creationSource) === "/personal-orders"
-              ? "Back to Personal Orders"
-              : resolveListPath(formData.creationSource) === "/company-orders"
-                ? "Back to Company Orders"
-                : "Back to Orders"}
+            <OrderBackArrowIcon />
+            {listBackLabel}
           </button>
         </div>
       </DashboardShell>
@@ -2595,13 +2620,15 @@ function NewOrderPageContent() {
 
         <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <Link
-              href={listBackHref}
-              className="inline-flex items-center text-[12px] font-semibold text-[#007F96] hover:underline"
+            <button
+              type="button"
+              onClick={handleListBack}
+              className="mb-2 inline-flex h-[34px] items-center gap-2 rounded-[6px] border border-[#E2E8F0] bg-white px-3 text-[12px] font-semibold text-[#475569] shadow-sm hover:bg-[#F8FAFC]"
             >
+              <OrderBackArrowIcon />
               {listBackLabel}
-            </Link>
-            <h1 className="mt-2 text-[18px] font-semibold text-[#111827] sm:text-[20px]">
+            </button>
+            <h1 className="text-[18px] font-semibold text-[#111827] sm:text-[20px]">
               {isOrderReadOnly
                 ? "View Order"
                 : isEditMode
@@ -4030,4 +4057,18 @@ function ExistingFileLink({ label, name, href, onRemove }) {
 
 function Divider() {
   return <div className="h-px w-full bg-[#E2E8F0]" />;
+}
+
+function OrderBackArrowIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M19 12H5M11 6l-6 6 6 6"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
