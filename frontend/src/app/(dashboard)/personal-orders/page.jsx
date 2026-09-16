@@ -1,15 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardShell from "@/components/layout/DashboardShell";
 import PersonalOrderStatsGrid from "@/components/personal-orders/PersonalOrderStatsGrid";
 import PersonalOrderFilterBar, {
   defaultPersonalOrderFilters,
 } from "@/components/personal-orders/PersonalOrderFilterBar";
 import OrdersTable from "@/components/orders/OrdersTable";
+import {
+  ORDER_LIST_FILTER_KEYS,
+  consumeOrderListFilters,
+  writeOrderListFilters,
+} from "@/lib/orders/orderListFilterStorage";
 
 export default function PersonalOrdersPage() {
-  const [filters, setFilters] = useState(defaultPersonalOrderFilters);
+  const [filters, setFilters] = useState(() =>
+    consumeOrderListFilters(
+      ORDER_LIST_FILTER_KEYS.personalOrders,
+      defaultPersonalOrderFilters
+    )
+  );
+
+  useEffect(() => {
+    writeOrderListFilters(
+      ORDER_LIST_FILTER_KEYS.personalOrders,
+      filters,
+      defaultPersonalOrderFilters
+    );
+  }, [filters]);
 
   return (
     <DashboardShell>

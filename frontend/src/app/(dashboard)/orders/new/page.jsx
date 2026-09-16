@@ -1512,6 +1512,18 @@ function NewOrderPageContent() {
   const isOrderReadOnly =
     isEditMode && isOrderInactiveStatus(formData.status);
 
+  const listBackHref = useMemo(
+    () => resolveListPath(formData.creationSource),
+    [formData.creationSource, resolveListPath]
+  );
+
+  const listBackLabel = useMemo(() => {
+    if (listBackHref === "/personal-orders") return "← Back to Personal Orders";
+    if (listBackHref === "/company-orders") return "← Back to Company Orders";
+    if (listBackHref === "/reports") return "← Back to Reports";
+    return "← Back to Orders";
+  }, [listBackHref]);
+
   const personalRequestedDoctor = `${
     formData.requestedTreatingDoctor ||
     formData.newFacilityRequest?.treatingDoctor ||
@@ -2583,7 +2595,13 @@ function NewOrderPageContent() {
 
         <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-[18px] font-semibold text-[#111827] sm:text-[20px]">
+            <Link
+              href={listBackHref}
+              className="inline-flex items-center text-[12px] font-semibold text-[#007F96] hover:underline"
+            >
+              {listBackLabel}
+            </Link>
+            <h1 className="mt-2 text-[18px] font-semibold text-[#111827] sm:text-[20px]">
               {isOrderReadOnly
                 ? "View Order"
                 : isEditMode

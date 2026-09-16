@@ -14,6 +14,11 @@ import {
   isPersonalOrderSource,
   toApiCreationSource,
 } from "@/lib/orders/orderFilterConstants";
+import {
+  ORDER_LIST_FILTER_KEYS,
+  consumeOrderListFilters,
+  writeOrderListFilters,
+} from "@/lib/orders/orderListFilterStorage";
 import { STAFF_PORTAL_ORDERS_HIDDEN } from "@/lib/portalNavigationVisibility";
 
 const BATCH_SCAN_FLASH_KEY = "dms.batchScanFlash";
@@ -21,7 +26,9 @@ const BATCH_SCAN_FLASH_MS = 10000;
 
 export default function OrdersPage() {
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
-  const [filters, setFilters] = useState(defaultOrderFilters);
+  const [filters, setFilters] = useState(() =>
+    consumeOrderListFilters(ORDER_LIST_FILTER_KEYS.orders, defaultOrderFilters)
+  );
   const [batchScanFlash, setBatchScanFlash] = useState(null);
 
   const orderSource = filters.creationSource || "internal";
@@ -31,6 +38,14 @@ export default function OrdersPage() {
     () => toApiCreationSource(orderSource) || null,
     [orderSource]
   );
+
+  useEffect(() => {
+    writeOrderListFilters(
+      ORDER_LIST_FILTER_KEYS.orders,
+      filters,
+      defaultOrderFilters
+    );
+  }, [filters]);
 
   useEffect(() => {
     let message = "";

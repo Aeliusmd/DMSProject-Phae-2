@@ -282,11 +282,17 @@ export function clearAuth() {
   // Wipe order drafts with the auth session so the next user on this tab
   // cannot restore another person's unsaved edit.
   try {
-    const prefix = "dms:order-draft-session:";
+    const prefixes = [
+      "dms:order-draft-session:",
+      "dms:order-list-filters:",
+      "dms:order-list-filters-pending:",
+    ];
     const keysToRemove = [];
     for (let i = 0; i < window.sessionStorage.length; i += 1) {
       const key = window.sessionStorage.key(i);
-      if (key && key.startsWith(prefix)) keysToRemove.push(key);
+      if (key && prefixes.some((prefix) => key.startsWith(prefix))) {
+        keysToRemove.push(key);
+      }
     }
     keysToRemove.forEach((key) => window.sessionStorage.removeItem(key));
   } catch {

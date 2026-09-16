@@ -59,6 +59,7 @@ import {
   getDeliveryStatus,
 } from "@/lib/orders/deliveryActions";
 import { getOrderPeriodStartDate } from "@/lib/orders/orderFilterConstants";
+import { markOrderListFiltersForRestore } from "@/lib/orders/orderListFilterStorage";
 import {
   emailXrayInvoiceByOrderId,
   resendInvoices,
@@ -192,6 +193,10 @@ function buildOrderEditHref(
   }
   if (panel) params.set("panel", panel);
   return `/orders/new?${params.toString()}`;
+}
+
+function rememberFiltersBeforeOrderEdit(returnTo = "orders") {
+  markOrderListFiltersForRestore(returnTo);
 }
 
 const defaultOrderFilters = {
@@ -1873,6 +1878,15 @@ export default function OrdersTable({
                                 listReturnTo,
                               }),
                             })}
+                            onClick={() =>
+                              rememberFiltersBeforeOrderEdit(
+                                resolveOrderListReturnTo(order, {
+                                  personalMode,
+                                  companyPortalMode,
+                                  listReturnTo,
+                                })
+                              )
+                            }
                             className="min-w-0 font-semibold text-[#007F96] hover:underline"
                             title={
                               incompleteRequired ? incompleteTooltip : undefined
@@ -2177,6 +2191,25 @@ export default function OrdersTable({
                                 personalMode,
                                 companyPortalMode,
                               })}
+                              onNavigateToHref={() => {
+                                const href = getWorkflowStageHref(stage, order, {
+                                  listReturnTo,
+                                  personalMode,
+                                  companyPortalMode,
+                                });
+                                if (
+                                  href &&
+                                  href.startsWith("/orders/new?")
+                                ) {
+                                  rememberFiltersBeforeOrderEdit(
+                                    resolveOrderListReturnTo(order, {
+                                      listReturnTo,
+                                      personalMode,
+                                      companyPortalMode,
+                                    })
+                                  );
+                                }
+                              }}
                               onAdvance={
                                 stage.canAdvance
                                   ? () =>
@@ -2427,6 +2460,15 @@ export default function OrdersTable({
                                   listReturnTo,
                                 }),
                               })}
+                              onClick={() =>
+                                rememberFiltersBeforeOrderEdit(
+                                  resolveOrderListReturnTo(order, {
+                                    personalMode,
+                                    companyPortalMode,
+                                    listReturnTo,
+                                  })
+                                )
+                              }
                               className="font-semibold text-red-500 hover:underline"
                             >
                               No DOI
@@ -3218,6 +3260,7 @@ function getWorkflowStageHref(stage, order, options = {}) {
 function WorkflowStageItem({
   stage,
   href,
+  onNavigateToHref,
   onAdvance,
   onEmailRecords,
   onPreviewRecords,
@@ -3399,7 +3442,7 @@ function WorkflowStageItem({
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link href={href} onClick={() => onNavigateToHref?.()} className={className}>
         {content}
       </Link>
     );

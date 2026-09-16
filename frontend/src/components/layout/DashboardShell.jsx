@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import ImpersonationBanner from "@/components/layout/ImpersonationBanner";
 import DailyReminderPopup from "@/components/notifications/DailyReminderPopup";
+import {
+  clearPendingOrderListFilterRestores,
+  shouldKeepPendingOrderListFilterRestore,
+} from "@/lib/orders/orderListFilterStorage";
 
 const MOBILE_QUERY = "(max-width: 767px)";
 
@@ -13,8 +18,15 @@ const MOBILE_QUERY = "(max-width: 767px)";
  * lockScroll: New/Edit Order — only card panels scroll, never the page.
  */
 export default function DashboardShell({ children, lockScroll = false }) {
+  const pathname = usePathname();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (!shouldKeepPendingOrderListFilterRestore(pathname)) {
+      clearPendingOrderListFilterRestores();
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const media = window.matchMedia(MOBILE_QUERY);

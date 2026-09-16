@@ -5,6 +5,11 @@ import DashboardShell from "@/components/layout/DashboardShell";
 import OrderFilterBar from "@/components/orders/OrderFilterBar";
 import OrdersTable from "@/components/orders/OrdersTable";
 import { getCompanyOrderStats } from "@/lib/orders/orderApi";
+import {
+  ORDER_LIST_FILTER_KEYS,
+  consumeOrderListFilters,
+  writeOrderListFilters,
+} from "@/lib/orders/orderListFilterStorage";
 
 const defaultFilters = {
   facility: "",
@@ -16,7 +21,9 @@ const defaultFilters = {
 };
 
 export default function CompanyOrdersPage() {
-  const [filters, setFilters] = useState(defaultFilters);
+  const [filters, setFilters] = useState(() =>
+    consumeOrderListFilters(ORDER_LIST_FILTER_KEYS.companyOrders, defaultFilters)
+  );
   const [stats, setStats] = useState({
     totalOrders: 0,
     inProcess: 0,
@@ -24,6 +31,14 @@ export default function CompanyOrdersPage() {
     paid: 0,
     released: 0,
   });
+
+  useEffect(() => {
+    writeOrderListFilters(
+      ORDER_LIST_FILTER_KEYS.companyOrders,
+      filters,
+      defaultFilters
+    );
+  }, [filters]);
 
   useEffect(() => {
     let cancelled = false;
