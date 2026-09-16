@@ -112,6 +112,8 @@ function mapReportOrderRow(row) {
     invoiceStatus: row.invoice_status || null,
     invoiceAmount: invoiced ? formatMoney(totalAmount) : "$0.00",
     subpoenaDate: normalizeDate(row.subpoena_date),
+    subpoenaUploadedAt: row.subpoena_uploaded_at || null,
+    subpoenaUploadedAtDisplay: normalizeDate(row.subpoena_uploaded_at),
     dateServed: normalizeDate(row.date_served),
     applicant: buildFullName(
       row.applicant_first_name,

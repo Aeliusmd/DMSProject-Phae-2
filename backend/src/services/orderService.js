@@ -1076,6 +1076,8 @@ function mapOrderListRow(
     providerEmail: trimOrNull(row.provider_email) || "",
     subpoenaDate: toInputDate(row.subpoena_date),
     subpoenaDateDisplay: toShortDate(row.subpoena_date),
+    subpoenaUploadedAt: row.subpoena_uploaded_at || null,
+    subpoenaUploadedAtDisplay: toShortDate(row.subpoena_uploaded_at),
     dateServed: toInputDate(row.date_served),
     dateServedDisplay: toShortDate(row.date_served),
     dateRequested: toInputDate(row.date_requested),
@@ -1391,6 +1393,8 @@ function mapOrderDetail(
     additionalDocumentFile: null,
     subpoenaStoragePath: row.subpoena_storage_path || null,
     subpoenaUrl: buildSubpoenaUrl(row.subpoena_storage_path),
+    subpoenaUploadedAt: row.subpoena_uploaded_at || null,
+    subpoenaUploadedAtDisplay: toShortDate(row.subpoena_uploaded_at),
     medicalRecordsStoragePath: primaryUploaded?.storagePath || null,
     medicalRecordsUrl: primaryUploaded?.storageUrl || null,
     documents: documents.map(mapDocument),
@@ -2755,6 +2759,7 @@ async function createOrder(data, actorId, files, options = {}) {
     const orderId = await Order.create(connection, {
       ...payload,
       subpoenaStoragePath,
+      subpoenaUploadedAt: hasSubpoenaFile ? new Date() : null,
       orderNumber,
       status: "Active",
       hasNote: 0,
@@ -3275,6 +3280,14 @@ async function updateOrder(id, data, actorId, files) {
         newSubpoenaPath || existing.subpoena_storage_path || null;
     }
 
+    const previousSubpoenaPath = existing.subpoena_storage_path || null;
+    let subpoenaUploadedAt = existing.subpoena_uploaded_at || null;
+    if (subpoenaStoragePath && subpoenaStoragePath !== previousSubpoenaPath) {
+      subpoenaUploadedAt = new Date();
+    } else if (!subpoenaStoragePath) {
+      subpoenaUploadedAt = null;
+    }
+
     const providerId = await resolveProviderId(connection, data);
     const payload = buildOrderDbPayload(
       applyInjuryFromExtract({ ...data, providerId }, linkedExtract)
@@ -3299,6 +3312,7 @@ async function updateOrder(id, data, actorId, files) {
       ...payload,
       ...mismatchState,
       subpoenaStoragePath,
+      subpoenaUploadedAt,
       hasSubpoena: orderFlags.hasSubpoena,
       orderNumber,
     });

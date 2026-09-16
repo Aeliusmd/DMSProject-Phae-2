@@ -604,6 +604,9 @@ function ReportCaseCell({ order, onOpenSubpoena }) {
     "subpoenaDateDisplay",
     "subpoenaDate"
   );
+  const subpoenaUploadedDate =
+    order.subpoenaUploadedAtDisplay ||
+    formatShortDate(order.subpoenaUploadedAt);
   const dateServed = formatReportDate(order, "dateServedDisplay", "dateServed");
 
   return (
@@ -629,7 +632,12 @@ function ReportCaseCell({ order, onOpenSubpoena }) {
           </button>
           {subpoenaDate ? (
             <p className="mt-1 text-[10px] font-medium text-[#64748B]">
-              {subpoenaDate}
+              Subpoena Date: {subpoenaDate}
+            </p>
+          ) : null}
+          {subpoenaUploadedDate ? (
+            <p className="mt-1 text-[10px] font-medium text-[#64748B]">
+              Subpoena Uploaded Date: {subpoenaUploadedDate}
             </p>
           ) : null}
         </div>
@@ -787,6 +795,8 @@ function toRenderOrder(order, companyPortalMode = false) {
     createdAt: order.createdAt || order.created_at || "",
     subpoenaDate: order.subpoenaDate || "",
     subpoenaDateDisplay: order.subpoenaDateDisplay || "",
+    subpoenaUploadedAt: order.subpoenaUploadedAt || "",
+    subpoenaUploadedAtDisplay: order.subpoenaUploadedAtDisplay || "",
     dateServed: order.dateServed || "",
     dateServedDisplay: order.dateServedDisplay || "",
     dateRequested: order.dateRequested || "",
@@ -2075,8 +2085,17 @@ export default function OrdersTable({
                               </button>
                               {order.subpoenaDateDisplay || order.subpoenaDate ? (
                                 <p className="mt-1 text-[10px] font-medium text-[#64748B]">
+                                  Subpoena Date:{" "}
                                   {order.subpoenaDateDisplay ||
                                     formatShortDate(order.subpoenaDate)}
+                                </p>
+                              ) : null}
+                              {order.subpoenaUploadedAtDisplay ||
+                              order.subpoenaUploadedAt ? (
+                                <p className="mt-1 text-[10px] font-medium text-[#64748B]">
+                                  Subpoena Uploaded Date:{" "}
+                                  {order.subpoenaUploadedAtDisplay ||
+                                    formatShortDate(order.subpoenaUploadedAt)}
                                 </p>
                               ) : null}
                             </div>

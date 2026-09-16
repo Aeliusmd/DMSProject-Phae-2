@@ -4,11 +4,7 @@ export const DELETE_REASON_OTHER = "Other";
 
 export const PREDEFINED_DELETE_REASONS = [
   "Duplicate Order",
-  "Order Created by Mistake",
   "Incorrect Order Information",
-  "Customer Requested Cancellation",
-  "Order No Longer Required",
-  "Duplicate Subpoena",
   DELETE_REASON_OTHER,
 ];
 

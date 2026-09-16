@@ -216,6 +216,7 @@ async function attachSubpoenaPath(internalOrderId, storagePath) {
   await pool.execute(
     `UPDATE orders
      SET subpoena_storage_path = :path,
+         subpoena_uploaded_at = NOW(),
          has_subpoena = 1,
          updated_at = NOW()
      WHERE id = :id`,
