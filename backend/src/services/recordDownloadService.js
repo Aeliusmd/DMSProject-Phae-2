@@ -215,6 +215,15 @@ async function streamDownloadByToken(token, res) {
     throw new ApiError(404, "Records are no longer available for download");
   }
 
+  // Additive tracking: mark viewed/downloaded when the file is actually served.
+  // Failures here must never block the download.
+  try {
+    await RecordDownloadLink.markDownloaded(link.id);
+    await Order.markRecordsDownloaded(order.id);
+  } catch (_trackingError) {
+    // Intentionally ignore tracking errors.
+  }
+
   const safeOrderNumber = `${order.order_number || order.id}`.replace(
     /[^\w.-]+/g,
     "_"

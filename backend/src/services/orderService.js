@@ -1107,6 +1107,9 @@ function mapOrderListRow(
     mailSentDate: toInputDate(row.ready_date),
     readyDate: toInputDate(row.ready_date),
     deliveryDate: toInputDate(row.delivery_date),
+    recordsDownloaded: Boolean(row.records_downloaded_at),
+    recordsDownloadedAt: row.records_downloaded_at || null,
+    recordsDownloadedAtDisplay: toShortDate(row.records_downloaded_at),
     pickupPersonName: row.pickup_person_name || "",
     cnrDateSent: toInputDate(row.cnr_date_sent),
     recentNotes: extras.recentNotes || [],
@@ -1429,6 +1432,9 @@ function mapOrderDetail(
     rushLevel: rush.level,
     rushLabel: rush.label,
     readyDate: toInputDate(row.ready_date),
+    recordsDownloaded: Boolean(row.records_downloaded_at),
+    recordsDownloadedAt: row.records_downloaded_at || null,
+    recordsDownloadedAtDisplay: toShortDate(row.records_downloaded_at),
     invoiceDate: toInputDate(row.invoice_date || invoiceRow?.invoice_date),
     xrayInvoiceDate: toInputDate(
       row.xray_invoice_date || xrayRow?.xray_invoice_date

@@ -1605,6 +1605,27 @@ class Order {
 
     return result.affectedRows > 0;
   }
+
+  /**
+   * First successful emailed-records download only.
+   * Does not touch status, ready_date, or other order fields.
+   */
+  static async markRecordsDownloaded(orderId) {
+    const pool = getPool();
+    const id = Number(orderId);
+    if (!Number.isFinite(id) || id <= 0) return false;
+
+    const [result] = await pool.execute(
+      `UPDATE orders
+       SET records_downloaded_at = NOW(),
+           updated_at = NOW()
+       WHERE id = :id
+         AND records_downloaded_at IS NULL`,
+      { id }
+    );
+
+    return Number(result.affectedRows || 0) > 0;
+  }
 }
 
 module.exports = Order;

@@ -782,6 +782,9 @@ function toRenderOrder(order, companyPortalMode = false) {
     cnrDelivery: order.cnrDelivery || "",
     mailSentDate: order.readyDate || order.mailSentDate || "",
     readyDate: order.readyDate || "",
+    recordsDownloaded: Boolean(order.recordsDownloaded),
+    recordsDownloadedAt: order.recordsDownloadedAt || "",
+    recordsDownloadedAtDisplay: order.recordsDownloadedAtDisplay || "",
     deliveryDate: order.deliveryDate || "",
     pickupPersonName: order.pickupPersonName || "",
     cnrDateSent: order.cnrDateSent || "",
@@ -2299,16 +2302,40 @@ export default function OrdersTable({
                         return (
                           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                             {deliveryActions.mail && (
-                              <CompletedDeliveryLink
-                                label="Email"
-                                completed={mailStatus.completed}
-                                hoverText={mailStatus.hoverText}
-                                loading={
-                                  emailingRecordsOrderId === order.dbId ||
-                                  processingDeliveryKey === `${order.dbId}-mail`
-                                }
-                                onClick={() => handleEmailDelivery(order)}
-                              />
+                              <div className="flex flex-col items-start gap-0.5">
+                                <CompletedDeliveryLink
+                                  label="Email"
+                                  completed={mailStatus.completed}
+                                  hoverText={mailStatus.hoverText}
+                                  loading={
+                                    emailingRecordsOrderId === order.dbId ||
+                                    processingDeliveryKey === `${order.dbId}-mail`
+                                  }
+                                  onClick={() => handleEmailDelivery(order)}
+                                />
+                                {mailStatus.completed ? (
+                                  <span
+                                    title={
+                                      order.recordsDownloaded
+                                        ? order.recordsDownloadedAtDisplay ||
+                                          formatShortDate(
+                                            order.recordsDownloadedAt
+                                          ) ||
+                                          "Records downloaded"
+                                        : "Waiting for recipient to download records"
+                                    }
+                                    className={`text-[10px] font-semibold ${
+                                      order.recordsDownloaded
+                                        ? "text-[#059669]"
+                                        : "text-[#B45309]"
+                                    }`}
+                                  >
+                                    {order.recordsDownloaded
+                                      ? "Viewed"
+                                      : "Not viewed"}
+                                  </span>
+                                ) : null}
+                              </div>
                             )}
                             {deliveryActions.fax && (
                               <CompletedDeliveryLink
