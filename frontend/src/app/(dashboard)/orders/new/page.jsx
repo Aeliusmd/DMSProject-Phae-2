@@ -43,6 +43,7 @@ import {
 import { createOrder, getOrder, updateOrder, getUnprocessedSubpoenaById, fetchUnprocessedSubpoenaPdf, fetchOrderSubpoenaPdf, uploadSingleSubpoena, deleteOrderAdditionalDocument, removeOrderSubpoena } from "@/lib/orders/orderApi";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { getFacilities } from "@/lib/facilities/facilityApi";
+import { findSimilarFacilities } from "@/lib/orders/facilitySimilarity";
 import {
   clearDraftOrderSession,
   getDraftOrderScope,
@@ -398,6 +399,7 @@ function NewOrderPageContent() {
   const [facilityProfileIncomplete, setFacilityProfileIncomplete] = useState(false);
   const [facilityCreated, setFacilityCreated] = useState(false);
   const [resolvingFacility, setResolvingFacility] = useState(false);
+  const [matchedFacilities, setMatchedFacilities] = useState([]);
   const [missingDefaultDoctor, setMissingDefaultDoctor] = useState(false);
   const [doctorCreated, setDoctorCreated] = useState(false);
   const [resolvingDoctor, setResolvingDoctor] = useState(false);
@@ -1469,6 +1471,36 @@ function NewOrderPageContent() {
     }));
     setExtractionMeta((prev) => ({ ...prev, ...nextMeta }));
 
+    // Suggest system facilities with >= 80% name similarity to the extracted name.
+    // Does not change extraction; click only fills the form until Save.
+    try {
+      const extractedFacilityName = `${
+        nextMeta.pendingFacilityName ||
+        nextMeta.facilityName ||
+        nextUpdates.facilityName ||
+        formUpdates.facilityName ||
+        ""
+      }`.trim();
+
+      if (extractedFacilityName) {
+        let facilityList = facilities;
+        if (!facilityList.length) {
+          facilityList = await getFacilities();
+          setFacilities(facilityList);
+        }
+        setMatchedFacilities(
+          findSimilarFacilities(extractedFacilityName, facilityList, {
+            minScore: 0.8,
+            limit: 5,
+          })
+        );
+      } else {
+        setMatchedFacilities([]);
+      }
+    } catch {
+      setMatchedFacilities([]);
+    }
+
     const draftFacilityId = `${nextUpdates.facility || formUpdates.facility || ""}`.trim();
     if (draftFacilityId) {
       rememberDraftOrderSession(draftScope, {
@@ -1819,6 +1851,7 @@ function NewOrderPageContent() {
   const handleFacilityInput = (facilityName) => {
     if (isOrderReadOnly) return;
     clearCommittedFacility();
+    setMatchedFacilities([]);
     setExtractionMeta((prev) => ({
       ...prev,
       facilityName: "",
@@ -1872,8 +1905,14 @@ function NewOrderPageContent() {
         : {}),
     };
 
+    setMatchedFacilities([]);
     setFormDataAndRef(next);
     syncFacilityFromForm(next, { facilityChanged });
+  };
+
+  const handleMatchedFacilitySelect = (facility) => {
+    if (isOrderReadOnly || !facility) return;
+    handleFacilitySelect(facility);
   };
 
   const handleFacilityCommit = (typedName = "") => {
@@ -2242,6 +2281,7 @@ function NewOrderPageContent() {
     if (fieldName === "subpoenaFile" && file && !error) {
       setEditSubpoenaSrc("");
       setEditSubpoenaError("");
+      setMatchedFacilities([]);
       setExtractionMeta({
         facilityName: "",
         facilityCreated: false,
@@ -2314,6 +2354,7 @@ function NewOrderPageContent() {
       setExtractError("");
       setEditSubpoenaSrc("");
       setEditSubpoenaError("");
+      setMatchedFacilities([]);
     }
   };
 
@@ -2360,6 +2401,7 @@ function NewOrderPageContent() {
     setExtractError("");
     setEditSubpoenaSrc("");
     setEditSubpoenaError("");
+    setMatchedFacilities([]);
     clearCommittedFacility();
     setFileErrors((prev) => {
       const next = { ...prev };
@@ -2732,6 +2774,8 @@ function NewOrderPageContent() {
                 onFacilitySelect={handleFacilitySelect}
                 onFacilityBlur={handleFacilityBlur}
                 onFacilityCommit={handleFacilityCommit}
+                matchedFacilities={matchedFacilities}
+                onMatchedFacilitySelect={handleMatchedFacilitySelect}
                 returnToOrderPath={returnToOrderPath}
                 onBeforeFacilityProfileNavigate={persistOrderDraft}
                 readOnly={isOrderReadOnly}
@@ -2897,6 +2941,8 @@ function OrderDetailsForm({
   onFacilitySelect,
   onFacilityBlur,
   onFacilityCommit,
+  matchedFacilities = [],
+  onMatchedFacilitySelect,
   returnToOrderPath = "",
   onBeforeFacilityProfileNavigate,
   readOnly = false,
@@ -2992,6 +3038,49 @@ function OrderDetailsForm({
                 : "")
             }
           />
+
+          {!readOnly && matchedFacilities.length > 0 ? (
+            <div className="rounded-[6px] border border-[#BAE6FD] bg-[#F0F9FF] px-3 py-2.5">
+              <p className="text-[11px] font-semibold text-[#0369A1]">
+                Matched facilities from our system — select one to add
+              </p>
+              <p className="mt-0.5 text-[10px] text-[#0284C7]">
+                These names are similar to the facility extracted from the
+                subpoena. Clicking fills the field; save the order to keep it.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {matchedFacilities.map(({ facility, percent }) => {
+                  const label =
+                    facility.facility ||
+                    facility.facilityName ||
+                    facility.name ||
+                    `Facility ${facility.id}`;
+                  const isSelected =
+                    String(formData.facility || "") === String(facility.id);
+                  return (
+                    <li key={facility.id}>
+                      <button
+                        type="button"
+                        onClick={() => onMatchedFacilitySelect?.(facility)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-[5px] border px-2.5 py-1.5 text-left text-[12px] transition ${
+                          isSelected
+                            ? "border-[#0097B2] bg-white text-[#0F766E]"
+                            : "border-[#E0F2FE] bg-white text-[#334155] hover:border-[#67D8E8] hover:bg-[#F8FBFC]"
+                        }`}
+                      >
+                        <span className="min-w-0 truncate font-medium">
+                          {label}
+                        </span>
+                        <span className="shrink-0 text-[10px] font-semibold text-[#0284C7]">
+                          {percent}%
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
 
           {showPersonalAddFacilityLink && (
               <Link
