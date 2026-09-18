@@ -159,6 +159,11 @@ export default function OrdersPage() {
           creationSource={apiCreationSource}
           companyPortalMode={companyPortalMode}
           personalMode={personalMode}
+          createdSortDir={
+            filters.sortDir === "asc" || filters.sortDir === "desc"
+              ? filters.sortDir
+              : null
+          }
           listReturnTo="orders"
         />
       </div>

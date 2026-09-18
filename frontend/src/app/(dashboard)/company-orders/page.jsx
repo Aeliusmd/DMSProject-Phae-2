@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import DashboardShell from "@/components/layout/DashboardShell";
-import OrderFilterBar from "@/components/orders/OrderFilterBar";
+import OrderFilterBar, {
+  defaultOrderFilters,
+} from "@/components/orders/OrderFilterBar";
 import OrdersTable from "@/components/orders/OrdersTable";
 import { getCompanyOrderStats } from "@/lib/orders/orderApi";
 import {
@@ -12,12 +14,8 @@ import {
 } from "@/lib/orders/orderListFilterStorage";
 
 const defaultFilters = {
-  facility: "",
-  company: "",
-  year: "",
-  period: "",
-  status: "",
-  search: "",
+  ...defaultOrderFilters,
+  creationSource: "",
 };
 
 export default function CompanyOrdersPage() {
@@ -95,6 +93,11 @@ export default function CompanyOrdersPage() {
           useServerPagination
           creationSource="company_portal"
           companyPortalMode
+          createdSortDir={
+            filters.sortDir === "asc" || filters.sortDir === "desc"
+              ? filters.sortDir
+              : null
+          }
           listReturnTo="company-orders"
         />
       </div>

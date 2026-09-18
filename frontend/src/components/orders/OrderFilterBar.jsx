@@ -6,6 +6,7 @@ import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getFacilities } from "@/lib/facilities/facilityApi";
 import { getOrderFilterCompanies } from "@/lib/orders/orderApi";
 import {
+  ORDER_DATE_SORT_OPTIONS,
   ORDER_PERIOD_OPTIONS,
   ORDER_SOURCE_COMPANY,
   ORDER_SOURCE_INTERNAL,
@@ -13,6 +14,7 @@ import {
   getOrderSourceOptions,
   getStatusOptionsForOrderSource,
   isPersonalOrderSource,
+  normalizeOrderDateSortDir,
 } from "@/lib/orders/orderFilterConstants";
 import { STAFF_PORTAL_ORDERS_HIDDEN } from "@/lib/portalNavigationVisibility";
 
@@ -23,6 +25,7 @@ export const defaultOrderFilters = {
   period: "",
   status: "",
   search: "",
+  sortDir: "",
   creationSource: ORDER_SOURCE_INTERNAL,
 };
 
@@ -111,6 +114,7 @@ export default function OrderFilterBar({
       year: appliedFilters.year || "",
       period: appliedFilters.period || "",
       status: appliedFilters.status || "",
+      sortDir: normalizeOrderDateSortDir(appliedFilters.sortDir),
       creationSource:
         appliedFilters.creationSource || ORDER_SOURCE_INTERNAL,
     });
@@ -121,6 +125,7 @@ export default function OrderFilterBar({
     appliedFilters.year,
     appliedFilters.period,
     appliedFilters.status,
+    appliedFilters.sortDir,
     appliedFilters.search,
     appliedFilters.creationSource,
   ]);
@@ -183,6 +188,7 @@ export default function OrderFilterBar({
   const handleApplyFilters = () => {
     onFiltersChange?.({
       ...draftFilters,
+      sortDir: normalizeOrderDateSortDir(draftFilters.sortDir),
       company: isPersonalOrderSource(draftFilters.creationSource)
         ? ""
         : draftFilters.company,
@@ -282,6 +288,16 @@ export default function OrderFilterBar({
           onChange={(next) => updateDraftFilter("status", next)}
           options={statusOptions}
           aria-label="Status"
+          className={SELECT_CLASS}
+        />
+
+        <FilterSelect
+          value={normalizeOrderDateSortDir(draftFilters.sortDir)}
+          onChange={(next) =>
+            updateDraftFilter("sortDir", normalizeOrderDateSortDir(next))
+          }
+          options={ORDER_DATE_SORT_OPTIONS}
+          aria-label="Order date sort"
           className={SELECT_CLASS}
         />
 

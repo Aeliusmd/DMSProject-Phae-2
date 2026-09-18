@@ -8,6 +8,18 @@ export const ORDER_PERIOD_OPTIONS = [
   { value: "3m", label: "Past 3 Months" },
 ];
 
+/** Order date (created_at) sort for list filters. Empty keeps default list order. */
+export const ORDER_DATE_SORT_OPTIONS = [
+  { value: "", label: "Order Date" },
+  { value: "asc", label: "Ascending (Oldest first)" },
+  { value: "desc", label: "Descending (Newest first)" },
+];
+
+export function normalizeOrderDateSortDir(value) {
+  const normalized = `${value || ""}`.trim().toLowerCase();
+  return normalized === "asc" || normalized === "desc" ? normalized : "";
+}
+
 /** Order list source filter. Default is internal (normal system orders). */
 export const ORDER_SOURCE_OPTIONS = [
   { value: "internal", label: "Internal Orders" },
