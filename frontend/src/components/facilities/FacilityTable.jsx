@@ -13,6 +13,8 @@ export default function FacilitiesTable({
   facilities,
   onDelete,
   canDelete = true,
+  sortDir = "desc",
+  onSortDirChange = null,
 }) {
   const [deleteModal, setDeleteModal] = useState({
     open: false,
@@ -158,7 +160,12 @@ export default function FacilitiesTable({
           <table className="w-full min-w-[980px] border-collapse">
             <thead className="sticky top-0 z-10 bg-white">
               <tr className="border-b border-[#E2E8F0] text-left text-[11px] font-semibold text-[#475569]">
-                <th className="w-[60px] px-5 py-3">ID</th>
+                <th className="w-[90px] px-5 py-3">
+                  <FacilityIdSortHeader
+                    sortDir={sortDir}
+                    onSortDirChange={onSortDirChange}
+                  />
+                </th>
                 <th className="w-[280px] px-5 py-3">Facility</th>
                 <th className="w-[160px] px-5 py-3">City</th>
                 <th className="w-[100px] px-5 py-3">Zip</th>
@@ -305,6 +312,48 @@ export default function FacilitiesTable({
         onClose={() => setUploadAlert((prev) => ({ ...prev, open: false }))}
       />
     </>
+  );
+}
+
+function FacilityIdSortHeader({ sortDir, onSortDirChange }) {
+  const activeDir =
+    sortDir === "asc" || sortDir === "desc" ? sortDir : "desc";
+  const canSort = typeof onSortDirChange === "function";
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <span>ID</span>
+      {canSort ? (
+        <span className="inline-flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="Sort facility ID ascending"
+            title="Ascending (lowest to highest)"
+            onClick={() => onSortDirChange("asc")}
+            className={`inline-flex h-[18px] w-[18px] items-center justify-center rounded-[3px] border text-[10px] leading-none transition-colors ${
+              activeDir === "asc"
+                ? "border-[#0097B2] bg-[#E6F7FA] text-[#0097B2]"
+                : "border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#CBD5E1] hover:bg-[#F8FAFC]"
+            }`}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            aria-label="Sort facility ID descending"
+            title="Descending (highest to lowest)"
+            onClick={() => onSortDirChange("desc")}
+            className={`inline-flex h-[18px] w-[18px] items-center justify-center rounded-[3px] border text-[10px] leading-none transition-colors ${
+              activeDir === "desc"
+                ? "border-[#0097B2] bg-[#E6F7FA] text-[#0097B2]"
+                : "border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#CBD5E1] hover:bg-[#F8FAFC]"
+            }`}
+          >
+            ↓
+          </button>
+        </span>
+      ) : null}
+    </div>
   );
 }
 

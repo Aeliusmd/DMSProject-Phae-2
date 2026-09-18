@@ -439,6 +439,10 @@ async function getAllFacilities(query = {}) {
     }
   }
 
+  const sortDir =
+    String(query.sortDir || "").toLowerCase() === "asc" ? "asc" : "desc";
+  filters.sortDir = sortDir;
+
   const useKeysetPagination =
     String(query.pagination || "").toLowerCase() === "keyset";
   const pageSizeRaw = Number(query.pageSize || filters.limit || 10);

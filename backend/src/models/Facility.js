@@ -47,6 +47,8 @@ class Facility {
     const pool = connection || getPool();
     const conditions = ["is_active = 1"];
     const params = {};
+    const sortDir =
+      String(filters.sortDir || "").toLowerCase() === "asc" ? "asc" : "desc";
 
     if (filters.search) {
       conditions.push("facility_name LIKE :searchPrefix");
@@ -56,18 +58,19 @@ class Facility {
     const cursorId =
       Number(filters.cursorId) > 0 ? Number(filters.cursorId) : null;
     if (cursorId) {
-      conditions.push("id < :cursorId");
+      conditions.push(sortDir === "asc" ? "id > :cursorId" : "id < :cursorId");
       params.cursorId = cursorId;
     }
 
     const pageSize = Math.min(Math.max(Number(filters.pageSize) || 10, 1), 100);
     const queryLimit = pageSize + 1;
+    const orderDirection = sortDir === "asc" ? "ASC" : "DESC";
 
     const [rows] = await pool.execute(
       `SELECT id, facility_name, city, zip_code, state, email, phone, is_active, is_auto_created
        FROM facilities
        WHERE ${conditions.join(" AND ")}
-       ORDER BY id DESC
+       ORDER BY id ${orderDirection}
        LIMIT ${queryLimit}`,
       params
     );

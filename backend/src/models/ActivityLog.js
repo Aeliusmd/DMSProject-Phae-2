@@ -1,24 +1,30 @@
 const { getPool } = require("../config/database");
 const { likeContains, likePrefix } = require("../utils/sqlSafety");
 
-const ACTIVITY_LOG_SELECT = `id, log_date, log_time, action, module, company_name, facility_id,
-              performed_by, performer_name, performer_initials, details, created_at`;
+const ACTIVITY_LOG_SELECT = `al.id, al.log_date, al.log_time, al.action, al.module, al.company_name, al.facility_id,
+              al.performed_by, al.performer_name, al.performer_initials, al.details, al.created_at,
+              e.role AS performer_role`;
+
+const ACTIVITY_LOG_FROM = `activity_logs al
+       LEFT JOIN matrix_employees e ON e.id = al.performed_by`;
+
+const ACTIVITY_LOG_INSTANT_SQL = `TIMESTAMP(CONCAT(al.log_date, ' ', COALESCE(NULLIF(TRIM(al.log_time), ''), '00:00:00')))`;
 
 function buildFindByEmployeeWhere(employeeId, filters = {}) {
   const params = {
     employeeId,
     targetTag: `%target_employee_id:${Number(employeeId)}%`,
   };
-  const conditions = ["(performed_by = :employeeId OR details LIKE :targetTag)"];
+  const conditions = ["(al.performed_by = :employeeId OR al.details LIKE :targetTag)"];
 
   if (filters.search) {
     const trimmedSearch = `${filters.search}`.trim();
     if (trimmedSearch) {
       conditions.push(`(
-        performer_name LIKE :search
-        OR action LIKE :search
-        OR details LIKE :search
-        OR module LIKE :search
+        al.performer_name LIKE :search
+        OR al.action LIKE :search
+        OR al.details LIKE :search
+        OR al.module LIKE :search
       )`);
       params.search = likeContains(trimmedSearch);
     }
@@ -35,27 +41,34 @@ function buildFindAllWhere(filters = {}) {
   const params = {};
 
   if (filters.performedBy) {
-    conditions.push("performed_by = :performedBy");
+    conditions.push("al.performed_by = :performedBy");
     params.performedBy = filters.performedBy;
   }
 
   if (filters.module) {
-    conditions.push("module = :module");
+    conditions.push("al.module = :module");
     params.module = filters.module;
   }
 
-  if (filters.fromDate) {
-    conditions.push("log_date >= :fromDate");
+  // Prefer timezone-aware instant bounds when provided (viewer calendar day).
+  if (filters.fromLoggedAt) {
+    conditions.push(`${ACTIVITY_LOG_INSTANT_SQL} >= :fromLoggedAt`);
+    params.fromLoggedAt = filters.fromLoggedAt;
+  } else if (filters.fromDate) {
+    conditions.push("al.log_date >= :fromDate");
     params.fromDate = filters.fromDate;
   }
 
-  if (filters.toDate) {
-    conditions.push("log_date <= :toDate");
+  if (filters.toLoggedAt) {
+    conditions.push(`${ACTIVITY_LOG_INSTANT_SQL} <= :toLoggedAt`);
+    params.toLoggedAt = filters.toLoggedAt;
+  } else if (filters.toDate) {
+    conditions.push("al.log_date <= :toDate");
     params.toDate = filters.toDate;
   }
 
   if (filters.search) {
-    conditions.push("performer_name LIKE :searchPrefix");
+    conditions.push("al.performer_name LIKE :searchPrefix");
     params.searchPrefix = likePrefix(filters.search);
   }
 
@@ -87,11 +100,10 @@ class ActivityLog {
     const pool = getPool();
 
     const [rows] = await pool.execute(
-      `SELECT id, log_date, log_time, action, module, company_name, facility_id,
-              performed_by, performer_name, performer_initials, details, created_at
-       FROM activity_logs
-       WHERE performed_by = :employeeId
-       ORDER BY created_at DESC, id DESC
+      `SELECT ${ACTIVITY_LOG_SELECT}
+       FROM ${ACTIVITY_LOG_FROM}
+       WHERE al.performed_by = :employeeId
+       ORDER BY al.created_at DESC, al.id DESC
        LIMIT ${Number(limit)}`,
       { employeeId }
     );
@@ -105,9 +117,9 @@ class ActivityLog {
 
     const [rows] = await pool.execute(
       `SELECT ${ACTIVITY_LOG_SELECT}
-       FROM activity_logs
+       FROM ${ACTIVITY_LOG_FROM}
        ${whereClause}
-       ORDER BY id DESC
+       ORDER BY al.id DESC
        LIMIT ${Number(limit)}`,
       params
     );
@@ -122,7 +134,7 @@ class ActivityLog {
     const queryLimit = pageSize + 1;
     const cursorId =
       Number(filters.cursorId) > 0 ? Number(filters.cursorId) : null;
-    const cursorCondition = cursorId ? "id < :cursorId" : "";
+    const cursorCondition = cursorId ? "al.id < :cursorId" : "";
 
     if (cursorId) {
       params.cursorId = cursorId;
@@ -134,9 +146,9 @@ class ActivityLog {
 
     const [rows] = await pool.execute(
       `SELECT ${ACTIVITY_LOG_SELECT}
-       FROM activity_logs
+       FROM ${ACTIVITY_LOG_FROM}
        ${keysetWhereClause}
-       ORDER BY id DESC
+       ORDER BY al.id DESC
        LIMIT ${queryLimit}`,
       params
     );
@@ -173,9 +185,9 @@ class ActivityLog {
 
     const [rows] = await pool.execute(
       `SELECT ${ACTIVITY_LOG_SELECT}
-       FROM activity_logs
+       FROM ${ACTIVITY_LOG_FROM}
        ${whereClause}
-       ORDER BY id DESC
+       ORDER BY al.id DESC
        LIMIT ${limit}`,
       params
     );
@@ -190,7 +202,7 @@ class ActivityLog {
     const queryLimit = pageSize + 1;
     const cursorId =
       Number(filters.cursorId) > 0 ? Number(filters.cursorId) : null;
-    const cursorCondition = cursorId ? "id < :cursorId" : "";
+    const cursorCondition = cursorId ? "al.id < :cursorId" : "";
 
     if (cursorId) {
       params.cursorId = cursorId;
@@ -204,9 +216,9 @@ class ActivityLog {
 
     const [rows] = await pool.execute(
       `SELECT ${ACTIVITY_LOG_SELECT}
-       FROM activity_logs
+       FROM ${ACTIVITY_LOG_FROM}
        ${keysetWhereClause}
-       ORDER BY id DESC
+       ORDER BY al.id DESC
        LIMIT ${queryLimit}`,
       params
     );
@@ -237,9 +249,9 @@ class ActivityLog {
     const pool = getPool();
 
     const [rows] = await pool.execute(
-      `SELECT *
-       FROM activity_logs
-       WHERE id = :id
+      `SELECT ${ACTIVITY_LOG_SELECT}
+       FROM ${ACTIVITY_LOG_FROM}
+       WHERE al.id = :id
        LIMIT 1`,
       { id }
     );
@@ -251,23 +263,22 @@ class ActivityLog {
     const pool = getPool();
     const normalizedOrderId = Number(orderId);
     const orderTag = `%order_id:${normalizedOrderId}%`;
-    const conditions = ["details LIKE :orderTag"];
+    const conditions = ["al.details LIKE :orderTag"];
     const params = { orderTag };
 
     if (orderNumber) {
       conditions.push(
-        "(module = 'Orders' AND (details LIKE :orderNumberTag OR details LIKE :orderLabelTag))"
+        "(al.module = 'Orders' AND (al.details LIKE :orderNumberTag OR al.details LIKE :orderLabelTag))"
       );
       params.orderNumberTag = likeContains(orderNumber);
       params.orderLabelTag = likeContains(`order ${orderNumber}`);
     }
 
     const [rows] = await pool.execute(
-      `SELECT id, log_date, log_time, action, module, company_name, facility_id,
-              performed_by, performer_name, performer_initials, details, created_at
-       FROM activity_logs
+      `SELECT ${ACTIVITY_LOG_SELECT}
+       FROM ${ACTIVITY_LOG_FROM}
        WHERE ${conditions.join(" OR ")}
-       ORDER BY created_at DESC, id DESC
+       ORDER BY al.created_at DESC, al.id DESC
        LIMIT ${Number(limit)}`,
       params
     );

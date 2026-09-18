@@ -20,6 +20,7 @@ export default function FacilitiesPage() {
   const [error, setError] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const [sortDir, setSortDir] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [cursorHistory, setCursorHistory] = useState([null]);
   const cursorHistoryRef = useRef([null]);
@@ -78,6 +79,7 @@ export default function FacilitiesPage() {
         pagination: "keyset",
         cursor,
         pageSize: FACILITIES_PER_PAGE,
+        sortDir,
       });
       const hasMore = Boolean(result.pagination?.hasMore);
       const nextCursor =
@@ -107,7 +109,7 @@ export default function FacilitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [appliedSearch, currentPage]);
+  }, [appliedSearch, currentPage, sortDir]);
 
   useEffect(() => {
     cursorHistoryRef.current = cursorHistory;
@@ -116,6 +118,21 @@ export default function FacilitiesPage() {
   useEffect(() => {
     loadFacilities();
   }, [loadFacilities]);
+
+  const handleSortDirChange = (nextDir) => {
+    const normalized = nextDir === "asc" ? "asc" : "desc";
+    if (normalized === sortDir) return;
+
+    setSortDir(normalized);
+    setCurrentPage(1);
+    cursorHistoryRef.current = [null];
+    setCursorHistory([null]);
+    setPagination({
+      pageSize: FACILITIES_PER_PAGE,
+      hasMore: false,
+      nextCursor: null,
+    });
+  };
 
   const handleDeleteFacility = async (facility) => {
     if (!canDelete) return;
@@ -226,6 +243,8 @@ export default function FacilitiesPage() {
             facilities={facilities}
             onDelete={handleDeleteFacility}
             canDelete={canDelete}
+            sortDir={sortDir}
+            onSortDirChange={handleSortDirChange}
           />
         )}
 

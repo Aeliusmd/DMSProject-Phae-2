@@ -14,6 +14,9 @@ function buildFacilitiesQuery(filters = {}) {
   if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
   if (filters.cursor) params.set("cursor", String(filters.cursor));
   if (filters.pagination) params.set("pagination", String(filters.pagination));
+  if (filters.sortDir === "asc" || filters.sortDir === "desc") {
+    params.set("sortDir", filters.sortDir);
+  }
   const queryString = params.toString();
   return queryString ? `?${queryString}` : "";
 }

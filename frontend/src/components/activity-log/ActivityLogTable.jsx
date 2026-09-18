@@ -54,14 +54,21 @@ export default function ActivityLogTable({ logs, footer = null }) {
                 </td>
 
                 <td className="px-5 py-4 align-middle">
-                  <div className="flex items-center gap-2 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
                     <UserAvatar
                       initials={log.initials || getInitials(log.performedBy)}
                     />
 
-                    <span className="text-[12px] leading-none text-[#475569]">
-                      {log.performedBy}
-                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[12px] leading-tight text-[#475569]">
+                        {log.performedBy}
+                      </p>
+                      {log.performerRole || log.role ? (
+                        <p className="mt-0.5 text-[10px] font-medium leading-tight text-[#94A3B8]">
+                          {log.performerRole || log.role}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 </td>
 

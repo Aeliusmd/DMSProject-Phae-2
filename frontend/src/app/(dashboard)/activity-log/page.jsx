@@ -59,6 +59,7 @@ export default function ActivityLogPage() {
     fromDate: todayDate,
     toDate: todayDate,
   });
+  const [dateFilterError, setDateFilterError] = useState("");
   const [performerSearchDraft, setPerformerSearchDraft] = useState("");
   const [appliedPerformerSearch, setAppliedPerformerSearch] = useState("");
   const [milestoneOpen, setMilestoneOpen] = useState(false);
@@ -187,6 +188,7 @@ export default function ActivityLogPage() {
   const handleDateFilterChange = (e) => {
     const { name, value } = e.target;
 
+    setDateFilterError("");
     setDraftDateFilters((prev) => ({
       ...prev,
       [name]: value,
@@ -194,6 +196,23 @@ export default function ActivityLogPage() {
   };
 
   const handleApplyFilters = () => {
+    const fromDate = `${draftDateFilters.fromDate || ""}`.trim();
+    const toDate = `${draftDateFilters.toDate || ""}`.trim();
+    const today = getTodayDateInput();
+
+    if (fromDate && toDate && fromDate > toDate) {
+      setDateFilterError("From date must be on or before To date.");
+      return;
+    }
+
+    if ((fromDate && fromDate > today) || (toDate && toDate > today)) {
+      setDateFilterError(
+        "Date range cannot be in the future. Please select today or an earlier date."
+      );
+      return;
+    }
+
+    setDateFilterError("");
     setAppliedDateFilters({ ...draftDateFilters });
     setAppliedActiveFilter(draftActiveFilter);
     resetPagination();
@@ -210,6 +229,7 @@ export default function ActivityLogPage() {
       toDate: todayDate,
     };
 
+    setDateFilterError("");
     setDraftDateFilters(defaultDates);
     setAppliedDateFilters(defaultDates);
     setDraftActiveFilter("All Modules");
@@ -312,6 +332,7 @@ export default function ActivityLogPage() {
               name="fromDate"
               value={draftDateFilters.fromDate}
               onChange={handleDateFilterChange}
+              max={todayDate}
               className="w-[140px]"
             />
 
@@ -320,6 +341,7 @@ export default function ActivityLogPage() {
               name="toDate"
               value={draftDateFilters.toDate}
               onChange={handleDateFilterChange}
+              max={todayDate}
               className="w-[140px]"
             />
 
@@ -341,6 +363,12 @@ export default function ActivityLogPage() {
               </button>
             </div>
           </div>
+
+          {dateFilterError ? (
+            <p className="mt-2 rounded-[6px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-600">
+              {dateFilterError}
+            </p>
+          ) : null}
 
           {!ownLogsOnly ? (
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -433,7 +461,7 @@ export default function ActivityLogPage() {
   );
 }
 
-function DateFilter({ label, name, value, onChange, className = "" }) {
+function DateFilter({ label, name, value, onChange, max, className = "" }) {
   return (
     <div className={className}>
       <label className="mb-1 block text-[10px] font-semibold text-[#64748B]">
@@ -444,6 +472,7 @@ function DateFilter({ label, name, value, onChange, className = "" }) {
         type="date"
         name={name}
         value={value}
+        max={max || undefined}
         onChange={onChange}
         className="h-[34px] w-full rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] px-2 text-[12px] text-[#111827] outline-none focus:border-[#0097B2] focus:ring-2 focus:ring-[#0097B2]/10"
       />

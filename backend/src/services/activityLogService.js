@@ -22,6 +22,10 @@ const {
   formatUtcInstantDisplay,
   expandUtcInstantTokens,
   embedUtcInstantToken,
+  calendarTodayInTimezone,
+  startOfCalendarDayUtc,
+  endOfCalendarDayUtc,
+  toMysqlUtcDateTime,
 } = require("../utils/timezoneUtils");
 const config = require("../config");
 
@@ -321,6 +325,14 @@ function formatDisplayDate(logDate, logTime, timeZone = config.businessTimezone)
   return timePart ? `${datePart} ${timePart}` : datePart;
 }
 
+function formatPerformerRoleLabel(role) {
+  const normalized = String(role || "").trim().toLowerCase();
+  if (normalized === "admin") return "Super Admin";
+  if (normalized === "manager") return "Manager";
+  if (normalized === "employee") return "Employee";
+  return role ? String(role).trim() : "";
+}
+
 function mapLogRow(row, timeZone = config.businessTimezone) {
   const details = expandUtcInstantTokens(
     stripOrderIdTag(stripTargetTag(row.details)),
@@ -329,6 +341,9 @@ function mapLogRow(row, timeZone = config.businessTimezone) {
   const logDate = normalizeCalendarDate(row.log_date);
   const logTime = normalizeTimeValue(row.log_time);
   const loggedAt = loggedAtFromParts(row.log_date, row.log_time);
+  const performerRole = formatPerformerRoleLabel(
+    row.performer_role || row.role
+  );
 
   return {
     id: row.id,
@@ -338,6 +353,8 @@ function mapLogRow(row, timeZone = config.businessTimezone) {
     displayDate: formatDisplayDate(row.log_date, row.log_time, timeZone),
     by: row.performer_name,
     performedBy: row.performer_name,
+    performerRole,
+    role: performerRole,
     initials: row.performer_initials || getInitials(row.performer_name),
     callback: row.action,
     action: row.action,
@@ -491,16 +508,38 @@ async function queryLogs(query = {}, { timezone } = {}) {
   }
 
   const fromDate = parseOptionalIsoDate(query.fromDate, "fromDate");
-  if (fromDate) {
-    filters.fromDate = fromDate;
-  }
-
   const toDate = parseOptionalIsoDate(query.toDate, "toDate");
-  if (toDate) {
-    filters.toDate = toDate;
+  assertReportDateRange(fromDate, toDate);
+
+  const today = calendarTodayInTimezone(timeZone);
+  if (fromDate && fromDate > today) {
+    throw new ApiError(400, "From date cannot be in the future");
+  }
+  if (toDate && toDate > today) {
+    throw new ApiError(400, "To date cannot be in the future");
   }
 
-  assertReportDateRange(fromDate, toDate);
+  // Convert viewer calendar days to UTC instant bounds so local display
+  // matches the filtered range (avoids UTC date-only mismatch).
+  if (fromDate) {
+    const fromUtc = startOfCalendarDayUtc(fromDate, timeZone);
+    const fromMysql = toMysqlUtcDateTime(fromUtc);
+    if (fromMysql) {
+      filters.fromLoggedAt = fromMysql;
+    } else {
+      filters.fromDate = fromDate;
+    }
+  }
+
+  if (toDate) {
+    const toUtc = endOfCalendarDayUtc(toDate, timeZone);
+    const toMysql = toMysqlUtcDateTime(toUtc);
+    if (toMysql) {
+      filters.toLoggedAt = toMysql;
+    } else {
+      filters.toDate = toDate;
+    }
+  }
 
   if (query.search && `${query.search}`.trim()) {
     filters.search = sanitizeSearchText(query.search);
