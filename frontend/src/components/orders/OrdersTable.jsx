@@ -195,8 +195,11 @@ function buildOrderEditHref(
   return `/orders/new?${params.toString()}`;
 }
 
-function rememberFiltersBeforeOrderEdit(returnTo = "orders") {
-  markOrderListFiltersForRestore(returnTo);
+function rememberFiltersBeforeOrderEdit(
+  returnTo = "orders",
+  filtersSnapshot = null
+) {
+  markOrderListFiltersForRestore(returnTo, filtersSnapshot);
 }
 
 const defaultOrderFilters = {
@@ -206,6 +209,7 @@ const defaultOrderFilters = {
   period: "",
   status: "",
   search: "",
+  sortDir: "",
 };
 
 const DEFAULT_ORDER_FORMS = [
@@ -1669,6 +1673,21 @@ export default function OrdersTable({
       ? 13
       : 12;
 
+  const persistFiltersForOrderEdit = (returnTo) => {
+    rememberFiltersBeforeOrderEdit(returnTo, {
+      ...filters,
+      facility: normalizedFilters.facility,
+      company: normalizedFilters.company,
+      year: normalizedFilters.year,
+      period: normalizedFilters.period,
+      status: normalizedFilters.status,
+      search: normalizedFilters.search,
+      creationSource:
+        filters.creationSource || normalizedFilters.creationSource || "",
+      sortDir: sortDir || filters.sortDir || "",
+    });
+  };
+
   return (
     <>
       <section
@@ -1956,7 +1975,7 @@ export default function OrdersTable({
                               }),
                             })}
                             onClick={() =>
-                              rememberFiltersBeforeOrderEdit(
+                              persistFiltersForOrderEdit(
                                 resolveOrderListReturnTo(order, {
                                   personalMode,
                                   companyPortalMode,
@@ -2291,7 +2310,7 @@ export default function OrdersTable({
                                   href &&
                                   href.startsWith("/orders/new?")
                                 ) {
-                                  rememberFiltersBeforeOrderEdit(
+                                  persistFiltersForOrderEdit(
                                     resolveOrderListReturnTo(order, {
                                       listReturnTo,
                                       personalMode,
@@ -2575,7 +2594,7 @@ export default function OrdersTable({
                                 }),
                               })}
                               onClick={() =>
-                                rememberFiltersBeforeOrderEdit(
+                                persistFiltersForOrderEdit(
                                   resolveOrderListReturnTo(order, {
                                     personalMode,
                                     companyPortalMode,

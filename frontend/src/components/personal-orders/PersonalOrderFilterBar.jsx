@@ -165,6 +165,12 @@ export default function PersonalOrderFilterBar({ filters, onFiltersChange }) {
           onClick={() =>
             onFiltersChange?.({
               ...draftFilters,
+              // Keep column sort (↑/↓); draft does not edit sortDir.
+              sortDir:
+                appliedFilters.sortDir === "asc" ||
+                appliedFilters.sortDir === "desc"
+                  ? appliedFilters.sortDir
+                  : "",
               search: appliedFilters.search || "",
             })
           }

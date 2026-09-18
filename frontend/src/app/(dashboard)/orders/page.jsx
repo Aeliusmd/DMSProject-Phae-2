@@ -165,10 +165,18 @@ export default function OrdersPage() {
               : null
           }
           onCreatedSortDirChange={(nextDir) => {
-            setFilters((prev) => ({
-              ...prev,
-              sortDir: nextDir === "asc" || nextDir === "desc" ? nextDir : "",
-            }));
+            setFilters((prev) => {
+              const next = {
+                ...prev,
+                sortDir: nextDir === "asc" || nextDir === "desc" ? nextDir : "",
+              };
+              writeOrderListFilters(
+                ORDER_LIST_FILTER_KEYS.orders,
+                next,
+                defaultOrderFilters
+              );
+              return next;
+            });
           }}
           listReturnTo="orders"
         />

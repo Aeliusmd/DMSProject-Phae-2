@@ -61,7 +61,11 @@ export function listKeyFromReturnTo(returnTo = "orders") {
 }
 
 /** Call when opening an order for edit so returning to the list can restore filters. */
-export function markOrderListFiltersForRestore(returnToOrListKey = "orders") {
+export function markOrderListFiltersForRestore(
+  returnToOrListKey = "orders",
+  filters = null,
+  defaults = null
+) {
   if (typeof window === "undefined") return;
 
   const listKey =
@@ -75,6 +79,26 @@ export function markOrderListFiltersForRestore(returnToOrListKey = "orders") {
     window.sessionStorage.setItem(pendingKey(listKey), "1");
   } catch {
     // no-op
+  }
+
+  // Flush latest filters/sort immediately so a fast navigation cannot miss the
+  // async write from the list page useEffect.
+  if (filters && isPlainObject(filters)) {
+    if (defaults && isPlainObject(defaults)) {
+      writeOrderListFilters(listKey, filters, defaults);
+    } else {
+      try {
+        window.sessionStorage.setItem(
+          storageKey(listKey),
+          JSON.stringify({
+            filters,
+            savedAt: Date.now(),
+          })
+        );
+      } catch {
+        // no-op
+      }
+    }
   }
 }
 
@@ -96,6 +120,7 @@ export function clearPendingOrderListFilterRestores() {
 /**
  * Restore filters only when returning from order edit (pending flag set).
  * Visiting Orders from another page or after logout starts fresh.
+ * Strict Mode safe: pending "1" → "consumed" so a double-mount still restores.
  */
 export function consumeOrderListFilters(listKey, defaults) {
   if (typeof window === "undefined") return { ...defaults };
@@ -104,18 +129,40 @@ export function consumeOrderListFilters(listKey, defaults) {
   const stored = storageKey(listKey);
 
   try {
-    const shouldRestore = window.sessionStorage.getItem(pending) === "1";
-    window.sessionStorage.removeItem(pending);
+    const pendingState = window.sessionStorage.getItem(pending);
+    const shouldRestore =
+      pendingState === "1" || pendingState === "consumed";
 
     if (!shouldRestore) {
       window.sessionStorage.removeItem(stored);
       return { ...defaults };
     }
 
+    if (pendingState === "1") {
+      window.sessionStorage.setItem(pending, "consumed");
+    }
+
     const raw = window.sessionStorage.getItem(stored);
-    if (!raw) return { ...defaults };
+    if (!raw) {
+      window.sessionStorage.removeItem(pending);
+      return { ...defaults };
+    }
+
     const parsed = JSON.parse(raw);
-    return normalizeFilters(parsed?.filters, defaults);
+    const restored = normalizeFilters(parsed?.filters, defaults);
+
+    // Drop the one-shot flag after this navigation settles (after Strict remount).
+    window.setTimeout(() => {
+      try {
+        if (window.sessionStorage.getItem(pending) === "consumed") {
+          window.sessionStorage.removeItem(pending);
+        }
+      } catch {
+        // no-op
+      }
+    }, 0);
+
+    return restored;
   } catch {
     return { ...defaults };
   }
