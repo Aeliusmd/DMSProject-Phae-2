@@ -379,26 +379,39 @@ exports.create = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Validation failed", validation.errors);
   }
 
-  const order = await orderService.createOrder(
+  const created = await orderService.createOrder(
     req.body,
     req.user.id,
     req.files
   );
+  const orders = Array.isArray(created) ? created : [created];
+  const order = orders[0];
 
-  await logOrderActivity(req, order, {
-    action: "create",
-    details: `Created order ${order.orderNumber} for ${getOrderLogContext(order).companyName}`,
-  });
+  for (const createdOrder of orders) {
+    await logOrderActivity(req, createdOrder, {
+      action: "create",
+      details: `Created order ${createdOrder.orderNumber} for ${getOrderLogContext(createdOrder).companyName}`,
+    });
+
+    await notificationService.notifyOrderCreated({
+      orderNumber: createdOrder.orderNumber,
+      companyName: getOrderLogContext(createdOrder).companyName,
+      orderId: createdOrder.id,
+    });
+  }
 
   await logBillingPaymentActivity(req, order, req.body);
 
-  await notificationService.notifyOrderCreated({
-    orderNumber: order.orderNumber,
-    companyName: getOrderLogContext(order).companyName,
-    orderId: order.id,
-  });
+  const message =
+    orders.length > 1
+      ? `${orders.length} orders created successfully`
+      : "Order created successfully";
 
-  return ApiResponse.created(res, { order }, "Order created successfully");
+  return ApiResponse.created(
+    res,
+    { order, orders },
+    message
+  );
 });
 
 exports.update = asyncHandler(async (req, res) => {

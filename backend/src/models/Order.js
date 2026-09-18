@@ -822,10 +822,10 @@ class Order {
     return rows[0] || null;
   }
 
-  static async findByOrderNumber(orderNumber, excludeId = null) {
-    const pool = getPool();
+  static async findByOrderNumber(orderNumber, excludeId = null, connection = null) {
+    const db = connection || getPool();
 
-    const [rows] = await pool.execute(
+    const [rows] = await db.execute(
       `SELECT id FROM orders
        WHERE order_number = :orderNumber
          ${excludeId ? "AND id <> :excludeId" : ""}

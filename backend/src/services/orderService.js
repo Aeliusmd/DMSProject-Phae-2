@@ -230,6 +230,16 @@ function resolveRecordTypesFromForm(data = {}) {
   return [...new Set(types.filter((type) => VALID_RECORD_TYPES.includes(type)))];
 }
 
+/** Keep only one record-type flag so each split order owns a single type. */
+function applySingleRecordTypeToForm(data = {}, recordType) {
+  const next = { ...data, type: recordType };
+  for (const type of VALID_RECORD_TYPES) {
+    const flagKey = RECORD_TYPE_FLAG_MAP[type];
+    next[flagKey] = type === recordType;
+  }
+  return next;
+}
+
 function mapOrderRecordRow(row = {}) {
   const pageCount = Number(row.page_count);
   return {
@@ -2516,9 +2526,14 @@ function maybeStashExternalOrderRef(payload, suppliedExternalNumber) {
 async function assertOrderNumberAvailable(
   orderNumber,
   excludeId = null,
-  recordTypes = []
+  recordTypes = [],
+  connection = null
 ) {
-  const existingOrder = await Order.findByOrderNumber(orderNumber, excludeId);
+  const existingOrder = await Order.findByOrderNumber(
+    orderNumber,
+    excludeId,
+    connection
+  );
   if (!existingOrder) return;
 
   const typeLabel = Patient.normalizeRecordTypes(recordTypes).join(", ");
@@ -2567,7 +2582,8 @@ async function resolveOrderNumber(
           await assertOrderNumberAvailable(
             rebuiltNumber,
             excludeId,
-            normalizedTypes
+            normalizedTypes,
+            connection
           );
         }
         return {
@@ -2599,12 +2615,23 @@ async function resolveOrderNumber(
     const allocation = await Patient.allocateOrderNumber(
       connection,
       applicantIdentity,
-      normalizedTypes
+      normalizedTypes,
+      {
+        isOrderNumberTaken: async (candidate) => {
+          const row = await Order.findByOrderNumber(
+            candidate,
+            excludeId,
+            connection
+          );
+          return Boolean(row);
+        },
+      }
     );
     await assertOrderNumberAvailable(
       allocation.orderNumber,
       excludeId,
-      normalizedTypes
+      normalizedTypes,
+      connection
     );
 
     return {
@@ -2872,106 +2899,151 @@ async function createOrder(data, actorId, files, options = {}) {
     if (!recordTypes.length && !canAllowIncomplete) {
       throw new ApiError(400, "At least one record type is required");
     }
-    const resolvedNumber = await resolveOrderNumber(
-      connection,
-      orderInput.orderNumber,
-      null,
-      {
-        allowAutoPlaceholder: canAllowIncomplete,
-        extractId: subpoenaExtractId,
-        creationSource,
-        applicantIdentity,
-        recordTypes,
-      }
-    );
-    const {
-      orderNumber,
-      patientId,
-      patientOrderSequence,
-      suppliedExternalNumber,
-    } = resolvedNumber;
-    const payments = collectPayments(orderInput);
+
+    // DMS: one order per selected record type (0001-1, 0001-2, …).
+    const shouldSplitByRecordType =
+      usesDmsPatientOrderNumbers(creationSource) && recordTypes.length > 1;
+    const typesToCreate = shouldSplitByRecordType
+      ? recordTypes
+      : recordTypes.length
+        ? [recordTypes]
+        : [[]];
 
     const subpoenaFile = getUploadedFile(files, "subpoenaFile");
     const additionalDocFile = getUploadedFile(files, "additionalDocumentFile");
 
     let linkedExtract = null;
-    let subpoenaStoragePath = null;
     if (subpoenaExtractId) {
       linkedExtract = await batchScanRepository.getExtractById(subpoenaExtractId);
       if (!linkedExtract) {
         throw new ApiError(400, "Subpoena extract not found");
       }
       if (linkedExtract.is_processed) {
-        throw new ApiError(409, "This subpoena extract was already processed into an order");
-      }
-      try {
-        subpoenaStoragePath = fileStorage.archiveBatchScanSubpoenaToProcessed(
-          linkedExtract.storage_path,
-          orderNumber
+        throw new ApiError(
+          409,
+          "This subpoena extract was already processed into an order"
         );
-      } catch (error) {
-        throw new ApiError(404, error.message || "Subpoena PDF not found");
       }
-    } else {
-      subpoenaStoragePath = toRelativeStoragePath(subpoenaFile);
     }
 
     const providerId = await resolveProviderId(connection, orderInput);
-    const payload = buildOrderDbPayload(
-      applyInjuryFromExtract({ ...orderInput, providerId }, linkedExtract)
-    );
-    maybeStashExternalOrderRef(payload, suppliedExternalNumber);
-    const hasSubpoenaFile = Boolean(subpoenaStoragePath);
-    const orderFlags = resolveOrderFlags(orderInput, hasSubpoenaFile);
+    const sharedSubpoenaPathFromUpload = toRelativeStoragePath(subpoenaFile);
+    let sharedArchivedSubpoenaPath = null;
+    const createdOrderIds = [];
 
-    const orderId = await Order.create(connection, {
-      ...payload,
-      patientId,
-      patientOrderSequence,
-      subpoenaStoragePath,
-      subpoenaUploadedAt: hasSubpoenaFile ? new Date() : null,
-      orderNumber,
-      status: "Active",
-      hasNote: 0,
-      hasSubpoena: orderFlags.hasSubpoena,
-      createdBy: actorId || null,
-    });
+    for (let index = 0; index < typesToCreate.length; index += 1) {
+      const typeEntry = typesToCreate[index];
+      const singleTypes = Array.isArray(typeEntry) ? typeEntry : [typeEntry];
+      const singleType = singleTypes[0] || null;
+      const typedInput =
+        singleType && shouldSplitByRecordType
+          ? applySingleRecordTypeToForm(orderInput, singleType)
+          : orderInput;
 
-    await OrderRecord.syncForOrder(
-      connection,
-      orderId,
-      recordTypes
-    );
+      const resolvedNumber = await resolveOrderNumber(
+        connection,
+        typedInput.orderNumber,
+        null,
+        {
+          allowAutoPlaceholder: canAllowIncomplete,
+          extractId: subpoenaExtractId,
+          creationSource,
+          applicantIdentity,
+          recordTypes: singleTypes,
+        }
+      );
+      const {
+        orderNumber,
+        patientId,
+        patientOrderSequence,
+        suppliedExternalNumber,
+      } = resolvedNumber;
+      const payments = collectPayments(typedInput);
 
-    await syncOrderPayments(connection, orderId, orderInput);
+      let subpoenaStoragePath = null;
+      if (subpoenaExtractId) {
+        if (!sharedArchivedSubpoenaPath) {
+          try {
+            sharedArchivedSubpoenaPath =
+              fileStorage.archiveBatchScanSubpoenaToProcessed(
+                linkedExtract.storage_path,
+                orderNumber
+              );
+          } catch (error) {
+            throw new ApiError(404, error.message || "Subpoena PDF not found");
+          }
+        }
+        subpoenaStoragePath = sharedArchivedSubpoenaPath;
+      } else {
+        subpoenaStoragePath = sharedSubpoenaPathFromUpload;
+      }
 
-    await saveOrderDocuments(connection, {
-      orderId,
-      additionalDocFile,
-      documentName: orderInput.documentName,
-      actorId,
-    });
+      const payload = buildOrderDbPayload(
+        applyInjuryFromExtract({ ...typedInput, providerId }, linkedExtract)
+      );
+      maybeStashExternalOrderRef(payload, suppliedExternalNumber);
+      const hasSubpoenaFile = Boolean(subpoenaStoragePath);
+      const orderFlags = resolveOrderFlags(typedInput, hasSubpoenaFile);
 
-    if (subpoenaExtractId) {
-      await batchScanRepository.linkExtractToOrder(connection, {
-        extractId: subpoenaExtractId,
-        orderId,
+      const orderId = await Order.create(connection, {
+        ...payload,
+        patientId,
+        patientOrderSequence,
+        subpoenaStoragePath,
+        subpoenaUploadedAt: hasSubpoenaFile ? new Date() : null,
+        orderNumber,
+        status: "Active",
+        hasNote: 0,
+        hasSubpoena: orderFlags.hasSubpoena,
+        createdBy: actorId || null,
       });
+
+      await OrderRecord.syncForOrder(connection, orderId, singleTypes);
+
+      // Payments + extra docs on the first split order only (avoid duplicating money/files).
+      const isPrimary = index === 0;
+      if (isPrimary) {
+        await syncOrderPayments(connection, orderId, typedInput);
+        await saveOrderDocuments(connection, {
+          orderId,
+          additionalDocFile,
+          documentName: typedInput.documentName,
+          actorId,
+        });
+        if (subpoenaExtractId) {
+          await batchScanRepository.linkExtractToOrder(connection, {
+            extractId: subpoenaExtractId,
+            orderId,
+          });
+        }
+      }
+
+      await Order.seedWorkflowStages(connection, orderId);
+
+      await syncOrderWorkflowFromState(connection, orderId, {
+        payments: isPrimary ? payments : [],
+        invoiceServiceFee: 0,
+      });
+
+      createdOrderIds.push(orderId);
     }
-
-    await Order.seedWorkflowStages(connection, orderId);
-
-    await syncOrderWorkflowFromState(connection, orderId, {
-      payments,
-      invoiceServiceFee: 0,
-    });
 
     await connection.commit();
 
-    await maybeSendCnrMemoEmail(orderId, orderInput, null, actorId);
+    for (const orderId of createdOrderIds) {
+      await maybeSendCnrMemoEmail(orderId, orderInput, null, actorId);
+    }
 
-    return getOrderById(orderId);
+    const orders = [];
+    for (const orderId of createdOrderIds) {
+      orders.push(await getOrderById(orderId));
+    }
+
+    if (orders.length === 1) {
+      return orders[0];
+    }
+
+    return orders;
   } catch (error) {
     await connection.rollback();
     rethrowServiceError(error);
@@ -3214,16 +3286,21 @@ async function autoCreateOrdersFromBatch({ childIds = [], actorId, chosenFacilit
 
   for (const extractId of childIds) {
     try {
-      const order = await createOrderFromExtract(extractId, actorId, {
+      const createdResult = await createOrderFromExtract(extractId, actorId, {
         chosenFacilityId,
       });
-      created.push({
-        extractId,
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        hasIncompleteRequiredFields: order.hasIncompleteRequiredFields,
-        facilityMismatch: Boolean(order.facilityMismatch),
-      });
+      const orders = Array.isArray(createdResult)
+        ? createdResult
+        : [createdResult];
+      for (const order of orders) {
+        created.push({
+          extractId,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          hasIncompleteRequiredFields: order.hasIncompleteRequiredFields,
+          facilityMismatch: Boolean(order.facilityMismatch),
+        });
+      }
     } catch (error) {
       const message = error.message || "Failed to auto-create order";
       const isNoExtraction =

@@ -160,7 +160,7 @@ export async function createOrder(payload) {
     body: buildOrderFormData(payload),
   });
 
-  return data?.data?.order;
+  return data?.data?.order || data?.data?.orders?.[0] || null;
 }
 
 export async function updateOrder(id, payload) {

@@ -1,9 +1,13 @@
 /**
  * Patient model — stable applicant identity + DMS order numbers.
- * Order numbers are LPAD(patient_number,4,'0') plus record-type codes:
+ *
+ * Per-patient prefix: LPAD(patient_number, 4, '0') e.g. 0001
+ * Per record type (one order = one type):
  *   medical=1, billing=2, employment=3, xrays=4, other=5
- * Examples: 0001-1, 0001-2, 0001-1-2, 0001-1-2-3-4-5
- * When no record types are known yet, falls back to per-patient sequence (0001-N).
+ * Examples: 0001-1 (medical), 0001-2 (billing), 0001-3 (employment)
+ *
+ * If that type number is already used for the patient, falls back to
+ * 0001-{sequence} from next_order_sequence.
  */
 
 const { getPool } = require("../config/database");
@@ -41,17 +45,29 @@ function normalizeRecordTypes(recordTypes = []) {
   const selected = new Set(
     (Array.isArray(recordTypes) ? recordTypes : [])
       .map((type) => `${type || ""}`.trim().toLowerCase())
-      .filter((type) => Object.prototype.hasOwnProperty.call(RECORD_TYPE_ORDER_CODES, type))
+      .filter((type) =>
+        Object.prototype.hasOwnProperty.call(RECORD_TYPE_ORDER_CODES, type)
+      )
   );
 
   return RECORD_TYPE_CODE_ORDER.filter((type) => selected.has(type));
 }
 
-function formatPatientOrderNumber(patientNumber, recordTypes = [], sequence = null) {
+function formatPatientOrderNumber(
+  patientNumber,
+  recordTypes = [],
+  sequence = null
+) {
   const padded = padPatientNumber(patientNumber);
   const types = normalizeRecordTypes(recordTypes);
 
-  if (types.length) {
+  // Prefer a single record-type code (orders are split one-type-per-order).
+  if (types.length === 1) {
+    return `${padded}-${RECORD_TYPE_ORDER_CODES[types[0]]}`;
+  }
+
+  // Legacy multi-type on one row (updates) — keep joined codes.
+  if (types.length > 1) {
     const codes = types.map((type) => RECORD_TYPE_ORDER_CODES[type]);
     return `${padded}-${codes.join("-")}`;
   }
@@ -134,7 +150,8 @@ class Patient {
               first_name, middle_name, last_name, dob, ssn_last_four
        FROM patients
        WHERE id = :id
-       LIMIT 1`,
+       LIMIT 1
+       FOR UPDATE`,
       { id }
     );
     return rows[0] || null;
@@ -206,11 +223,15 @@ class Patient {
   }
 
   /**
-   * Find or create patient, then allocate the next internal sequence and
-   * build the display order number from selected record types.
-   * Returns { patientId, patientNumber, patientOrderSequence, orderNumber }.
+   * Find or create patient, allocate sequence, build display order number.
+   * Prefer type code (0001-1). If taken, use sequence fallback (0001-6).
    */
-  static async allocateOrderNumber(connection, identity = {}, recordTypes = []) {
+  static async allocateOrderNumber(
+    connection,
+    identity = {},
+    recordTypes = [],
+    { isOrderNumberTaken = null } = {}
+  ) {
     let patient = await this.findMatch(connection, identity);
 
     if (!patient) {
@@ -222,16 +243,30 @@ class Patient {
       patient.id
     );
     const patientNumber = Number(patient.patient_number);
+    const types = normalizeRecordTypes(recordTypes);
+
+    let orderNumber = formatPatientOrderNumber(
+      patientNumber,
+      types,
+      patientOrderSequence
+    );
+
+    if (typeof isOrderNumberTaken === "function") {
+      const taken = await isOrderNumberTaken(orderNumber);
+      if (taken) {
+        orderNumber = formatPatientOrderNumber(
+          patientNumber,
+          [],
+          patientOrderSequence
+        );
+      }
+    }
 
     return {
       patientId: patient.id,
       patientNumber,
       patientOrderSequence,
-      orderNumber: formatPatientOrderNumber(
-        patientNumber,
-        recordTypes,
-        patientOrderSequence
-      ),
+      orderNumber,
     };
   }
 }
