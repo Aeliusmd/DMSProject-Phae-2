@@ -13,10 +13,7 @@ import {
   sanitizeZip,
 } from "@/lib/validations/zipUtils";
 
-const AUTO_PENDING_ORDER_PREFIX = "AUTO-PENDING-";
-
 export const immediateRequiredFields = [
-  "orderNumber",
   "facility",
   "type",
   "firstName",
@@ -203,12 +200,7 @@ export function validateNewOrderForm(data, fileErrors = {}) {
     return validatePersonalPortalOrderForm(data, fileErrors);
   }
 
-  if (
-    !data.orderNumber?.trim() ||
-    data.orderNumber.trim().startsWith(AUTO_PENDING_ORDER_PREFIX)
-  ) {
-    errors.orderNumber = "Order number is required";
-  } else {
+  if (data.orderNumber?.trim()) {
     const orderNumberError = validateNoHtmlMarkup(data.orderNumber, {
       fieldLabel: "Order number",
     });

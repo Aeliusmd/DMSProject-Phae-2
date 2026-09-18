@@ -2946,7 +2946,7 @@ function OrderDetailsForm({
             Personal order — required fields
           </p>
           <p className="mt-1 leading-snug">
-            Order #, First &amp; Last name, Date of birth, Treating facility,
+            First &amp; Last name, Date of birth, Treating facility,
             Specific doctor, Specific dates needed, Type of records, Driver&apos;s licence number,
             and Document. Marked with <span className="text-red-500">*</span>.
           </p>
@@ -3428,11 +3428,15 @@ function ServeInfoForm({
         value={formData.orderNumber}
         onChange={onChange}
         onBlur={onBlur}
-        placeholder="Order number"
-        required
+        placeholder="Auto-assigned on save (e.g. 0001-1)"
         error={getError("orderNumber")}
         maxLength={50}
-        disabled={readOnly}
+        disabled
+        hint={
+          formData.orderNumber
+            ? undefined
+            : "Assigned automatically per patient (0001-1, 0001-2, …)"
+        }
       />
 
       <NewOrderField

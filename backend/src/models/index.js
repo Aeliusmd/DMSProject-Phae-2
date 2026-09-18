@@ -10,6 +10,7 @@ module.exports = {
   FacilityDoctor: require("./FacilityDoctor"),
   Provider: require("./Provider"),
   Order: require("./Order"),
+  Patient: require("./Patient"),
   FacilityDocument: require("./FacilityDocument"),
   FacilityNote: require("./FacilityNote"),
   FacilityNoteAttachment: require("./FacilityNoteAttachment"),

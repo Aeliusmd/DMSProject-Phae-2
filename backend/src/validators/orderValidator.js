@@ -571,11 +571,11 @@ function validateCnrFields(body = {}) {
 }
 
 function validateCreateOrder(body = {}) {
-  return validateOrderPayload(body, { requireOrderNumber: true });
+  return validateOrderPayload(body, { requireOrderNumber: false });
 }
 
 function validateUpdateOrder(body = {}) {
-  return validateOrderPayload(body, { requireOrderNumber: true });
+  return validateOrderPayload(body, { requireOrderNumber: false });
 }
 
 function validateOrderNote(body = {}) {

@@ -55,7 +55,9 @@ const {
   AUTO_PENDING_ORDER_PREFIX,
   computeMissingRequiredFields,
   mapOrderRowToRequiredFieldData,
+  isPendingAutoOrderNumber,
 } = require("../utils/orderRequiredFields");
+const Patient = require("../models/Patient");
 const logger = require("../utils/logger");
 const fileStorage = require("../utils/fileStorage");
 const {
@@ -2484,11 +2486,87 @@ async function saveOrderDocuments(
   return false;
 }
 
+function usesDmsPatientOrderNumbers(creationSource) {
+  return creationSource !== "personal_portal" && creationSource !== "company_portal";
+}
+
+function buildApplicantIdentity(data = {}) {
+  return {
+    firstName: trimOrNull(data.firstName, { maxLength: FIELD_LIMITS.VARCHAR_100 }),
+    middleName: trimOrNull(data.middleName, { maxLength: FIELD_LIMITS.VARCHAR_100 }),
+    lastName: trimOrNull(data.lastName, { maxLength: FIELD_LIMITS.VARCHAR_100 }),
+    dob: dateOrNull(data.dob),
+    ssnLastFour: ssnLastFour(data.ssn || data.ssnLastFour),
+  };
+}
+
+function maybeStashExternalOrderRef(payload, suppliedExternalNumber) {
+  const external = trimOrNull(suppliedExternalNumber, {
+    maxLength: FIELD_LIMITS.VARCHAR_50,
+  });
+  if (!external || isPendingAutoOrderNumber(external)) {
+    return;
+  }
+  if (payload.orderRef) {
+    return;
+  }
+  payload.orderRef = external;
+}
+
 async function resolveOrderNumber(
+  connection,
   rawOrderNumber,
   excludeId = null,
-  { allowAutoPlaceholder = false, extractId = null } = {}
+  {
+    allowAutoPlaceholder = false,
+    extractId = null,
+    creationSource = "manual",
+    applicantIdentity = {},
+    existing = null,
+  } = {}
 ) {
+  if (usesDmsPatientOrderNumbers(creationSource)) {
+    const existingNumber = trimOrNull(existing?.order_number);
+    const existingPatientId = Number(existing?.patient_id) || null;
+    const existingSequence = Number(existing?.patient_order_sequence) || null;
+
+    // Keep any real existing number (including legacy rows without patient_id).
+    if (existingNumber && !isPendingAutoOrderNumber(existingNumber)) {
+      return {
+        orderNumber: existingNumber,
+        patientId: existingPatientId,
+        patientOrderSequence: existingSequence,
+        suppliedExternalNumber: trimOrNull(rawOrderNumber, {
+          maxLength: FIELD_LIMITS.VARCHAR_50,
+        }),
+      };
+    }
+
+    const allocation = await Patient.allocateOrderNumber(
+      connection,
+      applicantIdentity
+    );
+    const existingOrder = await Order.findByOrderNumber(
+      allocation.orderNumber,
+      excludeId
+    );
+    if (existingOrder) {
+      throw new ApiError(
+        409,
+        `An order with this order number already exists (${allocation.orderNumber})`
+      );
+    }
+
+    return {
+      orderNumber: allocation.orderNumber,
+      patientId: allocation.patientId,
+      patientOrderSequence: allocation.patientOrderSequence,
+      suppliedExternalNumber: trimOrNull(rawOrderNumber, {
+        maxLength: FIELD_LIMITS.VARCHAR_50,
+      }),
+    };
+  }
+
   let orderNumber = trimOrNull(rawOrderNumber, {
     maxLength: FIELD_LIMITS.VARCHAR_50,
   });
@@ -2500,16 +2578,21 @@ async function resolveOrderNumber(
     orderNumber = `${AUTO_PENDING_ORDER_PREFIX}${Number(extractId)}`;
   }
 
-  const existing = await Order.findByOrderNumber(orderNumber, excludeId);
+  const existingOrder = await Order.findByOrderNumber(orderNumber, excludeId);
 
-  if (existing) {
+  if (existingOrder) {
     throw new ApiError(
       409,
       `An order with this order number already exists (${orderNumber})`
     );
   }
 
-  return orderNumber;
+  return {
+    orderNumber,
+    patientId: null,
+    patientOrderSequence: null,
+    suppliedExternalNumber: null,
+  };
 }
 
 async function resolveProviderId(connection, data) {
@@ -2736,10 +2819,24 @@ async function createOrder(data, actorId, files, options = {}) {
     }
 
     const subpoenaExtractId = Number(orderInput.subpoenaExtractId) || null;
-    const orderNumber = await resolveOrderNumber(orderInput.orderNumber, null, {
-      allowAutoPlaceholder: canAllowIncomplete,
-      extractId: subpoenaExtractId,
-    });
+    const applicantIdentity = buildApplicantIdentity(orderInput);
+    const resolvedNumber = await resolveOrderNumber(
+      connection,
+      orderInput.orderNumber,
+      null,
+      {
+        allowAutoPlaceholder: canAllowIncomplete,
+        extractId: subpoenaExtractId,
+        creationSource,
+        applicantIdentity,
+      }
+    );
+    const {
+      orderNumber,
+      patientId,
+      patientOrderSequence,
+      suppliedExternalNumber,
+    } = resolvedNumber;
     const payments = collectPayments(orderInput);
 
     const subpoenaFile = getUploadedFile(files, "subpoenaFile");
@@ -2771,6 +2868,7 @@ async function createOrder(data, actorId, files, options = {}) {
     const payload = buildOrderDbPayload(
       applyInjuryFromExtract({ ...orderInput, providerId }, linkedExtract)
     );
+    maybeStashExternalOrderRef(payload, suppliedExternalNumber);
     const recordTypes = resolveRecordTypesFromForm(orderInput);
     if (!recordTypes.length && !canAllowIncomplete) {
       throw new ApiError(400, "At least one record type is required");
@@ -2780,6 +2878,8 @@ async function createOrder(data, actorId, files, options = {}) {
 
     const orderId = await Order.create(connection, {
       ...payload,
+      patientId,
+      patientOrderSequence,
       subpoenaStoragePath,
       subpoenaUploadedAt: hasSubpoenaFile ? new Date() : null,
       orderNumber,
@@ -3259,14 +3359,25 @@ async function updateOrder(id, data, actorId, files) {
     }
 
     const rawOrderNumber = trimOrNull(data.orderNumber);
-    if (!rawOrderNumber) {
-      throw new ApiError(400, "Order number is required");
-    }
-
     const subpoenaExtractId = Number(data.subpoenaExtractId) || null;
-    const orderNumber = await resolveOrderNumber(rawOrderNumber, existing.id, {
-      extractId: subpoenaExtractId,
-    });
+    const applicantIdentity = buildApplicantIdentity(data);
+    const resolvedNumber = await resolveOrderNumber(
+      connection,
+      rawOrderNumber,
+      existing.id,
+      {
+        extractId: subpoenaExtractId,
+        creationSource: existing.creation_source || "manual",
+        applicantIdentity,
+        existing,
+      }
+    );
+    const {
+      orderNumber,
+      patientId,
+      patientOrderSequence,
+      suppliedExternalNumber,
+    } = resolvedNumber;
     const payments = collectPayments(data);
 
     const subpoenaFile = getUploadedFile(files, "subpoenaFile");
@@ -3314,6 +3425,7 @@ async function updateOrder(id, data, actorId, files) {
     const payload = buildOrderDbPayload(
       applyInjuryFromExtract({ ...data, providerId }, linkedExtract)
     );
+    maybeStashExternalOrderRef(payload, suppliedExternalNumber);
     // Editing an auto-created order completes it; it must not convert the
     // source to manual or lose its Processed/Unprocessed classification.
     payload.creationSource = existing.creation_source || "manual";
@@ -3333,6 +3445,10 @@ async function updateOrder(id, data, actorId, files) {
     await Order.update(connection, existing.id, {
       ...payload,
       ...mismatchState,
+      patientId:
+        patientId ?? existing.patient_id ?? null,
+      patientOrderSequence:
+        patientOrderSequence ?? existing.patient_order_sequence ?? null,
       subpoenaStoragePath,
       subpoenaUploadedAt,
       hasSubpoena: orderFlags.hasSubpoena,

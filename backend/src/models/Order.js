@@ -197,7 +197,7 @@ const ORDER_HAS_AMOUNT_DUE = `(
   )
 )`;
 const ORDER_COLUMNS = `
-  order_number, rec_number, facility_id, provider_id, status, court,
+  patient_id, patient_order_sequence, order_number, rec_number, facility_id, provider_id, status, court,
   case_number, order_ref, ssn_last_four, dob,
   applicant_first_name, applicant_middle_name, applicant_last_name,
   applicant_aka, defendant, injury_type, injury_date, injury_date_begin, injury_date_end,
@@ -213,7 +213,7 @@ const ORDER_COLUMNS = `
   batch_chosen_facility_id, extracted_facility_id, facility_mismatch`;
 
 const ORDER_VALUES = `
-  :orderNumber, :recNumber, :facilityId, :providerId, :status, :court,
+  :patientId, :patientOrderSequence, :orderNumber, :recNumber, :facilityId, :providerId, :status, :court,
   :caseNumber, :orderRef, :ssnLastFour, :dob,
   :applicantFirstName, :applicantMiddleName, :applicantLastName,
   :applicantAka, :defendant, :injuryType, :injuryDate, :injuryDateBegin, :injuryDateEnd,
@@ -229,6 +229,8 @@ const ORDER_VALUES = `
   :batchChosenFacilityId, :extractedFacilityId, :facilityMismatch`;
 
 const ORDER_UPDATE_SET = `
+  patient_id = :patientId,
+  patient_order_sequence = :patientOrderSequence,
   order_number = :orderNumber,
   rec_number = :recNumber,
   facility_id = :facilityId,
