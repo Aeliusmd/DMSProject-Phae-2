@@ -6,7 +6,6 @@ import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getFacilities } from "@/lib/facilities/facilityApi";
 import { getOrderFilterCompanies } from "@/lib/orders/orderApi";
 import {
-  ORDER_DATE_SORT_OPTIONS,
   ORDER_PERIOD_OPTIONS,
   ORDER_SOURCE_COMPANY,
   ORDER_SOURCE_INTERNAL,
@@ -188,7 +187,8 @@ export default function OrderFilterBar({
   const handleApplyFilters = () => {
     onFiltersChange?.({
       ...draftFilters,
-      sortDir: normalizeOrderDateSortDir(draftFilters.sortDir),
+      // Keep current table sort; sort is controlled from Order Date column arrows.
+      sortDir: normalizeOrderDateSortDir(appliedFilters.sortDir),
       company: isPersonalOrderSource(draftFilters.creationSource)
         ? ""
         : draftFilters.company,
@@ -288,16 +288,6 @@ export default function OrderFilterBar({
           onChange={(next) => updateDraftFilter("status", next)}
           options={statusOptions}
           aria-label="Status"
-          className={SELECT_CLASS}
-        />
-
-        <FilterSelect
-          value={normalizeOrderDateSortDir(draftFilters.sortDir)}
-          onChange={(next) =>
-            updateDraftFilter("sortDir", normalizeOrderDateSortDir(next))
-          }
-          options={ORDER_DATE_SORT_OPTIONS}
-          aria-label="Order date sort"
           className={SELECT_CLASS}
         />
 

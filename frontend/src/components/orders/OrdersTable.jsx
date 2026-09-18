@@ -597,7 +597,9 @@ function getOrderIdColumnDate(order) {
 function getOrderDateColumnDisplay(order) {
   const fromDisplay = `${order.orderDateDisplay || ""}`.trim();
   if (fromDisplay) {
-    // Prefer date-only; strip any accidental time segment.
+    // Date only — never show time under Order Date.
+    const dateOnly = fromDisplay.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
+    if (dateOnly) return dateOnly[0];
     return fromDisplay.split(/\s+/)[0];
   }
   return getOrderIdColumnDate(order);
@@ -612,32 +614,32 @@ function OrderDateSortHeader({ sortDir, onSortDirChange }) {
     <div className="inline-flex items-center gap-1.5">
       <span>Order Date</span>
       {canSort ? (
-        <span className="inline-flex flex-col leading-none">
+        <span className="inline-flex items-center gap-1">
           <button
             type="button"
-            aria-label="Sort by order date ascending"
+            aria-label="Sort by order date ascending (oldest to newest)"
             title="Ascending (oldest to newest)"
             onClick={() => onSortDirChange("asc")}
-            className={`px-0.5 text-[9px] leading-none transition-colors ${
+            className={`inline-flex h-[18px] w-[18px] items-center justify-center rounded-[3px] border text-[10px] leading-none transition-colors ${
               activeDir === "asc"
-                ? "text-[#0097B2]"
-                : "text-[#94A3B8] hover:text-[#64748B]"
+                ? "border-[#0097B2] bg-[#E6F7FA] text-[#0097B2]"
+                : "border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#CBD5E1] hover:bg-[#F8FAFC]"
             }`}
           >
-            ▲
+            ↑
           </button>
           <button
             type="button"
-            aria-label="Sort by order date descending"
+            aria-label="Sort by order date descending (newest to oldest)"
             title="Descending (newest to oldest)"
             onClick={() => onSortDirChange("desc")}
-            className={`px-0.5 text-[9px] leading-none transition-colors ${
+            className={`inline-flex h-[18px] w-[18px] items-center justify-center rounded-[3px] border text-[10px] leading-none transition-colors ${
               activeDir === "desc"
-                ? "text-[#0097B2]"
-                : "text-[#94A3B8] hover:text-[#64748B]"
+                ? "border-[#0097B2] bg-[#E6F7FA] text-[#0097B2]"
+                : "border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#CBD5E1] hover:bg-[#F8FAFC]"
             }`}
           >
-            ▼
+            ↓
           </button>
         </span>
       ) : null}
