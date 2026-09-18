@@ -1,10 +1,29 @@
 /**
- * Patient model — stable applicant identity + order number sequences.
- * Order numbers are formatted as LPAD(patient_number,4,'0')-sequence (e.g. 0001-1).
+ * Patient model — stable applicant identity + DMS order numbers.
+ * Order numbers are LPAD(patient_number,4,'0') plus record-type codes:
+ *   medical=1, billing=2, employment=3, xrays=4, other=5
+ * Examples: 0001-1, 0001-2, 0001-1-2, 0001-1-2-3-4-5
+ * When no record types are known yet, falls back to per-patient sequence (0001-N).
  */
 
 const { getPool } = require("../config/database");
 const { toSqlDateOnly } = require("../utils/dateUtils");
+
+const RECORD_TYPE_ORDER_CODES = {
+  medical: 1,
+  billing: 2,
+  employment: 3,
+  xrays: 4,
+  other: 5,
+};
+
+const RECORD_TYPE_CODE_ORDER = [
+  "medical",
+  "billing",
+  "employment",
+  "xrays",
+  "other",
+];
 
 function digitsOnly(value) {
   return `${value || ""}`.replace(/\D/g, "");
@@ -14,14 +33,46 @@ function normalizeName(value) {
   return `${value || ""}`.trim().toLowerCase();
 }
 
-function formatPatientOrderNumber(patientNumber, sequence) {
-  const padded = String(Number(patientNumber)).padStart(4, "0");
-  return `${padded}-${Number(sequence)}`;
+function padPatientNumber(patientNumber) {
+  return String(Number(patientNumber)).padStart(4, "0");
+}
+
+function normalizeRecordTypes(recordTypes = []) {
+  const selected = new Set(
+    (Array.isArray(recordTypes) ? recordTypes : [])
+      .map((type) => `${type || ""}`.trim().toLowerCase())
+      .filter((type) => Object.prototype.hasOwnProperty.call(RECORD_TYPE_ORDER_CODES, type))
+  );
+
+  return RECORD_TYPE_CODE_ORDER.filter((type) => selected.has(type));
+}
+
+function formatPatientOrderNumber(patientNumber, recordTypes = [], sequence = null) {
+  const padded = padPatientNumber(patientNumber);
+  const types = normalizeRecordTypes(recordTypes);
+
+  if (types.length) {
+    const codes = types.map((type) => RECORD_TYPE_ORDER_CODES[type]);
+    return `${padded}-${codes.join("-")}`;
+  }
+
+  const seq = Number(sequence);
+  if (Number.isFinite(seq) && seq >= 1) {
+    return `${padded}-${seq}`;
+  }
+
+  return padded;
 }
 
 class Patient {
-  static formatOrderNumber(patientNumber, sequence) {
-    return formatPatientOrderNumber(patientNumber, sequence);
+  static RECORD_TYPE_ORDER_CODES = RECORD_TYPE_ORDER_CODES;
+
+  static formatOrderNumber(patientNumber, recordTypes = [], sequence = null) {
+    return formatPatientOrderNumber(patientNumber, recordTypes, sequence);
+  }
+
+  static normalizeRecordTypes(recordTypes = []) {
+    return normalizeRecordTypes(recordTypes);
   }
 
   static async findMatch(
@@ -71,6 +122,22 @@ class Patient {
     }
 
     return null;
+  }
+
+  static async findById(connection, patientId) {
+    const db = connection || getPool();
+    const id = Number(patientId);
+    if (!Number.isFinite(id) || id < 1) return null;
+
+    const [rows] = await db.execute(
+      `SELECT id, patient_number, next_order_sequence,
+              first_name, middle_name, last_name, dob, ssn_last_four
+       FROM patients
+       WHERE id = :id
+       LIMIT 1`,
+      { id }
+    );
+    return rows[0] || null;
   }
 
   static async allocateNextPatientNumber(connection) {
@@ -139,10 +206,11 @@ class Patient {
   }
 
   /**
-   * Find or create patient, then allocate the next order sequence.
+   * Find or create patient, then allocate the next internal sequence and
+   * build the display order number from selected record types.
    * Returns { patientId, patientNumber, patientOrderSequence, orderNumber }.
    */
-  static async allocateOrderNumber(connection, identity = {}) {
+  static async allocateOrderNumber(connection, identity = {}, recordTypes = []) {
     let patient = await this.findMatch(connection, identity);
 
     if (!patient) {
@@ -159,7 +227,11 @@ class Patient {
       patientId: patient.id,
       patientNumber,
       patientOrderSequence,
-      orderNumber: formatPatientOrderNumber(patientNumber, patientOrderSequence),
+      orderNumber: formatPatientOrderNumber(
+        patientNumber,
+        recordTypes,
+        patientOrderSequence
+      ),
     };
   }
 }

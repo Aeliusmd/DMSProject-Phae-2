@@ -2513,6 +2513,24 @@ function maybeStashExternalOrderRef(payload, suppliedExternalNumber) {
   payload.orderRef = external;
 }
 
+async function assertOrderNumberAvailable(
+  orderNumber,
+  excludeId = null,
+  recordTypes = []
+) {
+  const existingOrder = await Order.findByOrderNumber(orderNumber, excludeId);
+  if (!existingOrder) return;
+
+  const typeLabel = Patient.normalizeRecordTypes(recordTypes).join(", ");
+  const typeHint = typeLabel
+    ? ` for record type(s): ${typeLabel}`
+    : "";
+  throw new ApiError(
+    409,
+    `An order with this order number already exists (${orderNumber})${typeHint}`
+  );
+}
+
 async function resolveOrderNumber(
   connection,
   rawOrderNumber,
@@ -2523,47 +2541,77 @@ async function resolveOrderNumber(
     creationSource = "manual",
     applicantIdentity = {},
     existing = null,
+    recordTypes = [],
   } = {}
 ) {
   if (usesDmsPatientOrderNumbers(creationSource)) {
     const existingNumber = trimOrNull(existing?.order_number);
     const existingPatientId = Number(existing?.patient_id) || null;
     const existingSequence = Number(existing?.patient_order_sequence) || null;
+    const suppliedExternalNumber = trimOrNull(rawOrderNumber, {
+      maxLength: FIELD_LIMITS.VARCHAR_50,
+    });
+    const normalizedTypes = Patient.normalizeRecordTypes(recordTypes);
 
-    // Keep any real existing number (including legacy rows without patient_id).
+    // Existing DMS patient order: rebuild number from current record types
+    // (e.g. medical → 0001-1, medical+billing → 0001-1-2).
+    if (existingPatientId && existingNumber && !isPendingAutoOrderNumber(existingNumber)) {
+      const patient = await Patient.findById(connection, existingPatientId);
+      if (patient) {
+        const rebuiltNumber = Patient.formatOrderNumber(
+          patient.patient_number,
+          normalizedTypes,
+          existingSequence
+        );
+        if (rebuiltNumber !== existingNumber) {
+          await assertOrderNumberAvailable(
+            rebuiltNumber,
+            excludeId,
+            normalizedTypes
+          );
+        }
+        return {
+          orderNumber: rebuiltNumber,
+          patientId: existingPatientId,
+          patientOrderSequence: existingSequence,
+          suppliedExternalNumber,
+        };
+      }
+
+      return {
+        orderNumber: existingNumber,
+        patientId: existingPatientId,
+        patientOrderSequence: existingSequence,
+        suppliedExternalNumber,
+      };
+    }
+
+    // Legacy row with a real number but no patient_id — keep it stable.
     if (existingNumber && !isPendingAutoOrderNumber(existingNumber)) {
       return {
         orderNumber: existingNumber,
         patientId: existingPatientId,
         patientOrderSequence: existingSequence,
-        suppliedExternalNumber: trimOrNull(rawOrderNumber, {
-          maxLength: FIELD_LIMITS.VARCHAR_50,
-        }),
+        suppliedExternalNumber,
       };
     }
 
     const allocation = await Patient.allocateOrderNumber(
       connection,
-      applicantIdentity
+      applicantIdentity,
+      normalizedTypes
     );
-    const existingOrder = await Order.findByOrderNumber(
+    await assertOrderNumberAvailable(
       allocation.orderNumber,
-      excludeId
+      excludeId,
+      normalizedTypes
     );
-    if (existingOrder) {
-      throw new ApiError(
-        409,
-        `An order with this order number already exists (${allocation.orderNumber})`
-      );
-    }
 
     return {
       orderNumber: allocation.orderNumber,
       patientId: allocation.patientId,
       patientOrderSequence: allocation.patientOrderSequence,
-      suppliedExternalNumber: trimOrNull(rawOrderNumber, {
-        maxLength: FIELD_LIMITS.VARCHAR_50,
-      }),
+      suppliedExternalNumber,
     };
   }
 
@@ -2820,6 +2868,10 @@ async function createOrder(data, actorId, files, options = {}) {
 
     const subpoenaExtractId = Number(orderInput.subpoenaExtractId) || null;
     const applicantIdentity = buildApplicantIdentity(orderInput);
+    const recordTypes = resolveRecordTypesFromForm(orderInput);
+    if (!recordTypes.length && !canAllowIncomplete) {
+      throw new ApiError(400, "At least one record type is required");
+    }
     const resolvedNumber = await resolveOrderNumber(
       connection,
       orderInput.orderNumber,
@@ -2829,6 +2881,7 @@ async function createOrder(data, actorId, files, options = {}) {
         extractId: subpoenaExtractId,
         creationSource,
         applicantIdentity,
+        recordTypes,
       }
     );
     const {
@@ -2869,10 +2922,6 @@ async function createOrder(data, actorId, files, options = {}) {
       applyInjuryFromExtract({ ...orderInput, providerId }, linkedExtract)
     );
     maybeStashExternalOrderRef(payload, suppliedExternalNumber);
-    const recordTypes = resolveRecordTypesFromForm(orderInput);
-    if (!recordTypes.length && !canAllowIncomplete) {
-      throw new ApiError(400, "At least one record type is required");
-    }
     const hasSubpoenaFile = Boolean(subpoenaStoragePath);
     const orderFlags = resolveOrderFlags(orderInput, hasSubpoenaFile);
 
@@ -3361,6 +3410,10 @@ async function updateOrder(id, data, actorId, files) {
     const rawOrderNumber = trimOrNull(data.orderNumber);
     const subpoenaExtractId = Number(data.subpoenaExtractId) || null;
     const applicantIdentity = buildApplicantIdentity(data);
+    const recordTypes = resolveRecordTypesFromForm(data);
+    if (!recordTypes.length) {
+      throw new ApiError(400, "At least one record type is required");
+    }
     const resolvedNumber = await resolveOrderNumber(
       connection,
       rawOrderNumber,
@@ -3370,6 +3423,7 @@ async function updateOrder(id, data, actorId, files) {
         creationSource: existing.creation_source || "manual",
         applicantIdentity,
         existing,
+        recordTypes,
       }
     );
     const {
@@ -3434,10 +3488,6 @@ async function updateOrder(id, data, actorId, files) {
     payload.specificDoctorIsDefault = doctorChanged
       ? 0
       : boolToInt(existing.specific_doctor_is_default);
-    const recordTypes = resolveRecordTypesFromForm(data);
-    if (!recordTypes.length) {
-      throw new ApiError(400, "At least one record type is required");
-    }
     const hasSubpoenaFile = Boolean(subpoenaStoragePath);
     const orderFlags = resolveOrderFlags(data, hasSubpoenaFile);
     const mismatchState = resolveOrderFacilityMismatchOnUpdate(existing);

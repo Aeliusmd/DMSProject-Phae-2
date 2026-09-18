@@ -3428,14 +3428,14 @@ function ServeInfoForm({
         value={formData.orderNumber}
         onChange={onChange}
         onBlur={onBlur}
-        placeholder="Auto-assigned on save (e.g. 0001-1)"
+        placeholder="Auto-assigned on save (e.g. 0001-1 or 0001-1-2)"
         error={getError("orderNumber")}
         maxLength={50}
         disabled
         hint={
           formData.orderNumber
             ? undefined
-            : "Assigned automatically per patient (0001-1, 0001-2, …)"
+            : "Assigned from patient + record types (0001-1, 0001-1-2, …)"
         }
       />
 

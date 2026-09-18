@@ -1,4 +1,7 @@
--- Patient master + per-patient order sequence (e.g. 0001-1, 0001-2, 0002-1)
+-- Patient master + DMS order numbers from patient + record-type codes
+-- (medical=1, billing=2, employment=3, xrays=4, other=5).
+-- Examples: 0001-1, 0001-2, 0001-1-2, 0001-1-2-3-4-5
+-- next_order_sequence remains an internal uniqueness counter / fallback.
 -- Run against your app DB (e.g. dms_db / dms_db_test).
 
 CREATE TABLE IF NOT EXISTS patients (
