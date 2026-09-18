@@ -52,6 +52,17 @@ export default function PersonalOrdersPage() {
           fitToWindow
           useServerPagination
           personalMode
+          createdSortDir={
+            filters.sortDir === "asc" || filters.sortDir === "desc"
+              ? filters.sortDir
+              : null
+          }
+          onCreatedSortDirChange={(nextDir) => {
+            setFilters((prev) => ({
+              ...prev,
+              sortDir: nextDir === "asc" || nextDir === "desc" ? nextDir : "",
+            }));
+          }}
           listReturnTo="personal-orders"
         />
       </div>

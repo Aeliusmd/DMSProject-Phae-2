@@ -480,6 +480,11 @@ export default function ReportsPage() {
           filters={tableFilters}
           excludeCompleted
           createdSortDir={appliedFilters.sortDir}
+          onCreatedSortDirChange={(nextDir) => {
+            const sortDir = nextDir === "desc" ? "desc" : "asc";
+            setDraftFilters((prev) => ({ ...prev, sortDir }));
+            setAppliedFilters((prev) => ({ ...prev, sortDir }));
+          }}
           fitToWindow
           showDoctorColumn
           useServerPagination

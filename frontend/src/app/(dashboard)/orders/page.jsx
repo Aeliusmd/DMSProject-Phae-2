@@ -164,6 +164,12 @@ export default function OrdersPage() {
               ? filters.sortDir
               : null
           }
+          onCreatedSortDirChange={(nextDir) => {
+            setFilters((prev) => ({
+              ...prev,
+              sortDir: nextDir === "asc" || nextDir === "desc" ? nextDir : "",
+            }));
+          }}
           listReturnTo="orders"
         />
       </div>

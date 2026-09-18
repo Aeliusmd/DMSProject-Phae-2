@@ -14,6 +14,7 @@ export const defaultPersonalOrderFilters = {
   year: "",
   period: "",
   search: "",
+  sortDir: "",
 };
 
 const STATUS_OPTIONS = [

@@ -98,6 +98,12 @@ export default function CompanyOrdersPage() {
               ? filters.sortDir
               : null
           }
+          onCreatedSortDirChange={(nextDir) => {
+            setFilters((prev) => ({
+              ...prev,
+              sortDir: nextDir === "asc" || nextDir === "desc" ? nextDir : "",
+            }));
+          }}
           listReturnTo="company-orders"
         />
       </div>

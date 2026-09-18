@@ -594,6 +594,57 @@ function getOrderIdColumnDate(order) {
   );
 }
 
+function getOrderDateColumnDisplay(order) {
+  const fromDisplay = `${order.orderDateDisplay || ""}`.trim();
+  if (fromDisplay) {
+    // Prefer date-only; strip any accidental time segment.
+    return fromDisplay.split(/\s+/)[0];
+  }
+  return getOrderIdColumnDate(order);
+}
+
+function OrderDateSortHeader({ sortDir, onSortDirChange }) {
+  const activeDir =
+    sortDir === "asc" || sortDir === "desc" ? sortDir : null;
+  const canSort = typeof onSortDirChange === "function";
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <span>Order Date</span>
+      {canSort ? (
+        <span className="inline-flex flex-col leading-none">
+          <button
+            type="button"
+            aria-label="Sort by order date ascending"
+            title="Ascending (oldest to newest)"
+            onClick={() => onSortDirChange("asc")}
+            className={`px-0.5 text-[9px] leading-none transition-colors ${
+              activeDir === "asc"
+                ? "text-[#0097B2]"
+                : "text-[#94A3B8] hover:text-[#64748B]"
+            }`}
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            aria-label="Sort by order date descending"
+            title="Descending (newest to oldest)"
+            onClick={() => onSortDirChange("desc")}
+            className={`px-0.5 text-[9px] leading-none transition-colors ${
+              activeDir === "desc"
+                ? "text-[#0097B2]"
+                : "text-[#94A3B8] hover:text-[#64748B]"
+            }`}
+          >
+            ▼
+          </button>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function formatReportDate(order, displayKey, rawKey) {
   return order[displayKey] || formatShortDate(order[rawKey]);
 }
@@ -822,6 +873,7 @@ export default function OrdersTable({
   filters = defaultOrderFilters,
   excludeCompleted = false,
   createdSortDir = null,
+  onCreatedSortDirChange = null,
   fitToWindow = false,
   showDoctorColumn = false,
   useServerPagination = false,
@@ -1610,10 +1662,10 @@ export default function OrdersTable({
 
   const isReportView = Boolean(showDoctorColumn && excludeCompleted);
   const tableColumnCount = personalMode
-    ? 9
+    ? 10
     : isReportView
-      ? 12
-      : 11;
+      ? 13
+      : 12;
 
   return (
     <>
@@ -1704,49 +1756,53 @@ export default function OrdersTable({
               .orders-table-fit th:nth-child(2),
               .orders-table-fit td:nth-child(2) { width: 7% !important; }
               .orders-table-fit th:nth-child(3),
-              .orders-table-fit td:nth-child(3) { width: 10% !important; }
+              .orders-table-fit td:nth-child(3) { width: 7% !important; }
               .orders-table-fit th:nth-child(4),
               .orders-table-fit td:nth-child(4) { width: 9% !important; }
               .orders-table-fit th:nth-child(5),
-              .orders-table-fit td:nth-child(5) { width: 9% !important; }
+              .orders-table-fit td:nth-child(5) { width: 8% !important; }
               .orders-table-fit th:nth-child(6),
-              .orders-table-fit td:nth-child(6) { width: 9% !important; }
+              .orders-table-fit td:nth-child(6) { width: 8% !important; }
               .orders-table-fit th:nth-child(7),
-              .orders-table-fit td:nth-child(7) { width: 9% !important; }
+              .orders-table-fit td:nth-child(7) { width: 8% !important; }
               .orders-table-fit th:nth-child(8),
-              .orders-table-fit td:nth-child(8) { width: 9% !important; }
+              .orders-table-fit td:nth-child(8) { width: 8% !important; }
               .orders-table-fit th:nth-child(9),
-              .orders-table-fit td:nth-child(9) { width: 9% !important; }
+              .orders-table-fit td:nth-child(9) { width: 8% !important; }
               .orders-table-fit th:nth-child(10),
-              .orders-table-fit td:nth-child(10) { width: 9% !important; }
+              .orders-table-fit td:nth-child(10) { width: 8% !important; }
               .orders-table-fit th:nth-child(11),
-              .orders-table-fit td:nth-child(11) { width: 6% !important; }
+              .orders-table-fit td:nth-child(11) { width: 8% !important; }
               .orders-table-fit th:nth-child(12),
-              .orders-table-fit td:nth-child(12) { width: 9% !important; }
+              .orders-table-fit td:nth-child(12) { width: 6% !important; }
+              .orders-table-fit th:nth-child(13),
+              .orders-table-fit td:nth-child(13) { width: 10% !important; }
                   `
                   : `
               .orders-table-fit th:nth-child(1),
               .orders-table-fit td:nth-child(1) { width: 6% !important; }
               .orders-table-fit th:nth-child(2),
-              .orders-table-fit td:nth-child(2) { width: 8% !important; }
+              .orders-table-fit td:nth-child(2) { width: 7% !important; }
               .orders-table-fit th:nth-child(3),
-              .orders-table-fit td:nth-child(3) { width: 10% !important; }
+              .orders-table-fit td:nth-child(3) { width: 7% !important; }
               .orders-table-fit th:nth-child(4),
-              .orders-table-fit td:nth-child(4) { width: 10% !important; }
+              .orders-table-fit td:nth-child(4) { width: 9% !important; }
               .orders-table-fit th:nth-child(5),
               .orders-table-fit td:nth-child(5) { width: 9% !important; }
               .orders-table-fit th:nth-child(6),
-              .orders-table-fit td:nth-child(6) { width: 10% !important; }
+              .orders-table-fit td:nth-child(6) { width: 8% !important; }
               .orders-table-fit th:nth-child(7),
-              .orders-table-fit td:nth-child(7) { width: 10% !important; }
+              .orders-table-fit td:nth-child(7) { width: 9% !important; }
               .orders-table-fit th:nth-child(8),
-              .orders-table-fit td:nth-child(8) { width: 11% !important; }
+              .orders-table-fit td:nth-child(8) { width: 9% !important; }
               .orders-table-fit th:nth-child(9),
-              .orders-table-fit td:nth-child(9) { width: 8% !important; }
+              .orders-table-fit td:nth-child(9) { width: 10% !important; }
               .orders-table-fit th:nth-child(10),
-              .orders-table-fit td:nth-child(10) { width: 7% !important; }
+              .orders-table-fit td:nth-child(10) { width: 8% !important; }
               .orders-table-fit th:nth-child(11),
-              .orders-table-fit td:nth-child(11) { width: 11% !important; }
+              .orders-table-fit td:nth-child(11) { width: 7% !important; }
+              .orders-table-fit th:nth-child(12),
+              .orders-table-fit td:nth-child(12) { width: 11% !important; }
                   `
               }
               .orders-table-fit .order-action-btn {
@@ -1801,6 +1857,12 @@ export default function OrdersTable({
                   } px-4 py-3`}
                 >
                   ID
+                </th>
+                <th className="w-[100px] px-4 py-3">
+                  <OrderDateSortHeader
+                    sortDir={sortDir}
+                    onSortDirChange={onCreatedSortDirChange}
+                  />
                 </th>
                 <th className="w-[110px] px-4 py-3">Notes</th>
                 <th className="w-[150px] px-4 py-3">
@@ -1866,7 +1928,7 @@ export default function OrdersTable({
                   const incompleteTooltip = buildIncompleteOrderTooltip(
                     order.missingRequiredFields
                   );
-                  const idColumnDate = getOrderIdColumnDate(order);
+                  const orderDateDisplay = getOrderDateColumnDisplay(order);
                   const openHoverUpward =
                     orderIndex === currentOrders.length - 1;
 
@@ -1961,7 +2023,7 @@ export default function OrdersTable({
                           <p className="mt-1 text-[10px] font-medium text-[#0097B2]">
                             Personal Portal
                           </p>
-                        )}
+                          )}
 
                         {(companyPortalMode || personalMode) &&
                           order.facilityNotInSystem && (
@@ -2023,12 +2085,6 @@ export default function OrdersTable({
                               </button>
                             </div>
                           )}
-
-                        {idColumnDate ? (
-                          <p className="mt-1 text-[10px] font-medium text-[#64748B]">
-                            {idColumnDate}
-                          </p>
-                        ) : null}
                       </div>
 
                       {order.dateRequestedDisplay || order.dateRequested ? (
@@ -2046,6 +2102,16 @@ export default function OrdersTable({
                       >
                         Order Log
                       </button>
+                    </td>
+
+                    <td className="px-4 py-5 align-top">
+                      {orderDateDisplay ? (
+                        <p className="text-[11px] font-medium text-[#334155]">
+                          {orderDateDisplay}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] font-medium text-[#94A3B8]">—</p>
+                      )}
                     </td>
 
                     <td className="px-4 py-5 align-top">
