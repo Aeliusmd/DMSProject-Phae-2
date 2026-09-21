@@ -1773,9 +1773,12 @@ function NewOrderPageContent() {
           : {}),
       }));
       markCommittedFacility(resolved.facilityId, resolved.facilityName);
+      const selectedExisting = Boolean(options.fromMatchList);
       setFacilityProfileIncomplete(resolved.facilityProfileIncomplete);
-      setFacilityCreated(resolved.facilityCreated);
-      setFacilityReactivated(Boolean(resolved.facilityReactivated));
+      setFacilityCreated(selectedExisting ? false : resolved.facilityCreated);
+      setFacilityReactivated(
+        selectedExisting ? false : Boolean(resolved.facilityReactivated)
+      );
 
       const keepSubpoenaDoctorContext =
         extractionMetaRef.current.facilityName &&
@@ -1892,7 +1895,7 @@ function NewOrderPageContent() {
     }));
   };
 
-  const handleFacilitySelect = (facility) => {
+  const handleFacilitySelect = (facility, { fromMatchList = false } = {}) => {
     if (isOrderReadOnly) return;
     const newFacilityId = String(facility.id);
     const prevFacilityId = `${formDataRef.current.facility || ""}`.trim();
@@ -1926,12 +1929,12 @@ function NewOrderPageContent() {
 
     setMatchedFacilities([]);
     setFormDataAndRef(next);
-    syncFacilityFromForm(next, { facilityChanged });
+    syncFacilityFromForm(next, { facilityChanged, fromMatchList });
   };
 
   const handleMatchedFacilitySelect = (facility) => {
     if (isOrderReadOnly || !facility) return;
-    handleFacilitySelect(facility);
+    handleFacilitySelect(facility, { fromMatchList: true });
   };
 
   const handleFacilityCommit = (typedName = "") => {
@@ -3057,6 +3060,7 @@ function OrderDetailsForm({
             }
             facilityCreated={facilityCreated}
             facilityReactivated={facilityReactivated}
+            pendingFacilityMatches={!readOnly && matchedFacilities.length > 0}
             returnToOrderPath={returnToOrderPath}
             onBeforeFacilityProfileNavigate={onBeforeFacilityProfileNavigate}
             allowCreateFacility={allowCreateFacility}

@@ -16,6 +16,7 @@ export default function FacilitySearchField({
   facilityProfileIncomplete = false,
   facilityCreated = false,
   facilityReactivated = false,
+  pendingFacilityMatches = false,
   returnToOrderPath = "",
   onBeforeFacilityProfileNavigate,
   resolving = false,
@@ -240,7 +241,11 @@ export default function FacilitySearchField({
         <p className="mt-[4px] text-[10px] text-[#64748B]">Resolving facility...</p>
       )}
 
-      {facilityId && !facilityProfileIncomplete && !resolving && allowCreateFacility && (
+      {facilityId &&
+        !facilityProfileIncomplete &&
+        !resolving &&
+        allowCreateFacility &&
+        !pendingFacilityMatches && (
         <p className="mt-[4px] text-[10px] font-medium text-[#059669]">
           {facilityReactivated
             ? "Previously deleted facility restored and selected"
