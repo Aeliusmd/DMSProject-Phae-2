@@ -1927,7 +1927,9 @@ function NewOrderPageContent() {
         : {}),
     };
 
-    setMatchedFacilities([]);
+    if (!fromMatchList) {
+      setMatchedFacilities([]);
+    }
     setFormDataAndRef(next);
     syncFacilityFromForm(next, { facilityChanged, fromMatchList });
   };
@@ -2613,6 +2615,7 @@ function NewOrderPageContent() {
           resolvedFacility?.facilityId || syncedFormData.facility,
           resolvedFacility?.facilityName || syncedFormData.facilityName
         );
+        setMatchedFacilities([]);
         clearDraftOrderSession(draftScope);
         draftRestoredRef.current = false;
         router.push(resolveListPath(syncedFormData.creationSource));
@@ -2621,6 +2624,7 @@ function NewOrderPageContent() {
 
       const order = await createOrder(syncedFormData);
       if (order?.id) {
+        setMatchedFacilities([]);
         clearDraftOrderSession(draftScope);
         draftRestoredRef.current = false;
         router.push(resolveListPath(syncedFormData.creationSource));
@@ -3060,7 +3064,9 @@ function OrderDetailsForm({
             }
             facilityCreated={facilityCreated}
             facilityReactivated={facilityReactivated}
-            pendingFacilityMatches={!readOnly && matchedFacilities.length > 0}
+            pendingFacilityMatches={
+              !readOnly && matchedFacilities.length > 0 && !formData.facility
+            }
             returnToOrderPath={returnToOrderPath}
             onBeforeFacilityProfileNavigate={onBeforeFacilityProfileNavigate}
             allowCreateFacility={allowCreateFacility}
@@ -3082,10 +3088,10 @@ function OrderDetailsForm({
               </p>
               <p className="mt-0.5 text-[10px] text-[#0284C7]">
                 These names are similar to the facility extracted from the
-                subpoena. Clicking fills the field; save the order to keep it.
+                subpoena. Selected facility stays marked until you save the order.
               </p>
               <ul className="mt-2 space-y-1.5">
-                {matchedFacilities.map(({ facility, percent }) => {
+                {matchedFacilities.map(({ facility }) => {
                   const label =
                     facility.facility ||
                     facility.facilityName ||
@@ -3098,17 +3104,25 @@ function OrderDetailsForm({
                       <button
                         type="button"
                         onClick={() => onMatchedFacilitySelect?.(facility)}
-                        className={`flex w-full items-center justify-between gap-2 rounded-[5px] border px-2.5 py-1.5 text-left text-[12px] transition ${
+                        aria-pressed={isSelected}
+                        className={`flex w-full items-center gap-2 rounded-[5px] border px-2.5 py-1.5 text-left text-[12px] transition ${
                           isSelected
-                            ? "border-[#0097B2] bg-white text-[#0F766E]"
+                            ? "border-[#0097B2] bg-[#ECFEFF] text-[#0F766E]"
                             : "border-[#E0F2FE] bg-white text-[#334155] hover:border-[#67D8E8] hover:bg-[#F8FBFC]"
                         }`}
                       >
+                        <span
+                          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
+                            isSelected
+                              ? "border-[#059669] bg-[#059669] text-white"
+                              : "border-[#CBD5E1] bg-white text-transparent"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          ✓
+                        </span>
                         <span className="min-w-0 truncate font-medium">
                           {label}
-                        </span>
-                        <span className="shrink-0 text-[10px] font-semibold text-[#0284C7]">
-                          {percent}%
                         </span>
                       </button>
                     </li>
