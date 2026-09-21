@@ -64,6 +64,7 @@ export async function resolveFacility(payload = {}) {
   return {
     facility: data?.data?.facility || null,
     created: Boolean(data?.data?.created),
+    reactivated: Boolean(data?.data?.reactivated),
   };
 }
 

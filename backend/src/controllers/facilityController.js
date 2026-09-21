@@ -91,8 +91,13 @@ exports.search = asyncHandler(async (req, res) => {
 
 exports.resolve = asyncHandler(async (req, res) => {
   throwIfInvalid(validateResolveFacility(req.body));
-  const { facility, created } = await facilityService.resolveFacilityByName(req.body);
-  return ApiResponse.success(res, { facility, created });
+  const { facility, created, reactivated } =
+    await facilityService.resolveFacilityByName(req.body);
+  return ApiResponse.success(res, {
+    facility,
+    created,
+    reactivated: Boolean(reactivated),
+  });
 });
 
 exports.getById = asyncHandler(async (req, res) => {

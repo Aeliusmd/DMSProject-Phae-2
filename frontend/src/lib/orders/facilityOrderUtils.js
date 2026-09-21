@@ -245,6 +245,7 @@ export async function resolvePendingFacility({
           facilityId: "",
           facilityName: "",
           facilityCreated: false,
+          facilityReactivated: false,
           facilityProfileIncomplete: false,
         };
       }
@@ -257,6 +258,7 @@ export async function resolvePendingFacility({
           facilityId: String(facility.id),
           facilityName: canonicalName || trimmedName,
           facilityCreated: Boolean(facility.isAutoCreated),
+          facilityReactivated: false,
           facilityProfileIncomplete: Boolean(facility.isProfileIncomplete),
         };
       }
@@ -268,6 +270,7 @@ export async function resolvePendingFacility({
       facilityId: "",
       facilityName: "",
       facilityCreated: false,
+      facilityReactivated: false,
       facilityProfileIncomplete: false,
     };
   }
@@ -277,11 +280,12 @@ export async function resolvePendingFacility({
       facilityId: "",
       facilityName: trimmedName,
       facilityCreated: false,
+      facilityReactivated: false,
       facilityProfileIncomplete: false,
     };
   }
 
-  const { facility, created } = await resolveFacility({
+  const { facility, created, reactivated } = await resolveFacility({
     facilityName: trimmedName,
     address: `${address || ""}`.trim() || undefined,
     city: `${city || ""}`.trim() || undefined,
@@ -294,6 +298,7 @@ export async function resolvePendingFacility({
     facilityId: String(facility.id),
     facilityName: facility.facility || facility.facilityName || trimmedName,
     facilityCreated: created,
+    facilityReactivated: Boolean(reactivated),
     facilityProfileIncomplete: Boolean(facility.isProfileIncomplete),
   };
 }
@@ -321,6 +326,7 @@ export async function refreshFacilityProfileStatus(facilityId) {
     return {
       facilityProfileIncomplete: false,
       facilityCreated: false,
+      facilityReactivated: false,
     };
   }
 
@@ -328,5 +334,6 @@ export async function refreshFacilityProfileStatus(facilityId) {
   return {
     facilityProfileIncomplete: Boolean(facility?.isProfileIncomplete),
     facilityCreated: Boolean(facility?.isAutoCreated),
+    facilityReactivated: false,
   };
 }

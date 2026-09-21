@@ -259,19 +259,49 @@ class Facility {
     return rows;
   }
 
+  /**
+   * Username uniqueness check — includes inactive rows so soft-deleted
+   * facilities do not poison auto-create (uq_facilities_user_name).
+   */
   static async findByUserName(userName, excludeId = null) {
     const pool = getPool();
 
     const [rows] = await pool.execute(
-      `SELECT id FROM facilities
+      `SELECT id, is_active FROM facilities
        WHERE user_name = :userName
-         AND is_active = 1
          ${excludeId ? "AND id <> :excludeId" : ""}
        LIMIT 1`,
       { userName, excludeId }
     );
 
     return rows[0] || null;
+  }
+
+  /** Match inactive facility by case-insensitive name (for revive on auto-create). */
+  static async findInactiveByFacilityName(facilityName, connection = null) {
+    const db = connection || getPool();
+    const trimmed = `${facilityName || ""}`.trim();
+    if (!trimmed) return null;
+
+    const [rows] = await db.execute(
+      `SELECT *
+       FROM facilities
+       WHERE is_active = 0
+         AND LOWER(TRIM(facility_name)) = LOWER(TRIM(:facilityName))
+       ORDER BY id DESC
+       LIMIT 1`,
+      { facilityName: trimmed }
+    );
+
+    return rows[0] || null;
+  }
+
+  static async reactivate(id, connection = null) {
+    const db = connection || getPool();
+    await db.execute(
+      `UPDATE facilities SET is_active = 1, updated_at = NOW() WHERE id = :id`,
+      { id }
+    );
   }
 
   static async create(connection, data) {

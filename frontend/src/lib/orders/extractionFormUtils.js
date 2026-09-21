@@ -561,6 +561,7 @@ export function mapOrderHintsToForm(hints, { facilityList = [], providerList = [
       getFacilityLabel(facilityMatch);
     meta.facilityName = updates.facilityName;
     meta.facilityCreated = Boolean(hints.facilityCreated);
+    meta.facilityReactivated = Boolean(hints.facilityReactivated);
     meta.facilityProfileIncomplete = Boolean(hints.facilityProfileIncomplete);
   } else if (facilityMatch) {
     updates.facility = String(facilityMatch.id);
@@ -703,6 +704,9 @@ export function buildFormFromExtract(
       : {}),
     ...(extract?.facilityCreated != null
       ? { facilityCreated: extract.facilityCreated }
+      : {}),
+    ...(extract?.facilityReactivated != null
+      ? { facilityReactivated: extract.facilityReactivated }
       : {}),
     ...(extract?.facilityProfileIncomplete != null
       ? { facilityProfileIncomplete: extract.facilityProfileIncomplete }

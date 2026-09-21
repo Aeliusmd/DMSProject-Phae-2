@@ -77,7 +77,7 @@ async function mapExtractRowToApi(row) {
     orderHints = providerResolution.orderHints;
   }
 
-  let facilityResolution = { facility: null, created: false };
+  let facilityResolution = { facility: null, created: false, reactivated: false };
   if (orderHints.customer) {
     facilityResolution = await resolveFacilityFromHints(orderHints);
     if (facilityResolution.facility) {
@@ -89,6 +89,7 @@ async function mapExtractRowToApi(row) {
         facilityName:
           facilityResolution.facility.facilityName || customerName,
         facilityCreated: facilityResolution.created,
+        facilityReactivated: Boolean(facilityResolution.reactivated),
         facilityProfileIncomplete: Boolean(
           facilityResolution.facility.isProfileIncomplete
         ),
@@ -143,6 +144,7 @@ async function mapExtractRowToApi(row) {
       resolveCustomerFacilityName(orderHints.customer) ||
       null,
     facilityCreated: facilityResolution.created,
+    facilityReactivated: Boolean(facilityResolution.reactivated),
     facilityProfileIncomplete: Boolean(
       facilityResolution.facility?.isProfileIncomplete
     ),
@@ -184,25 +186,44 @@ function resolveFacilityMismatch(
 }
 
 async function resolveExtractedFacilityMeta(orderHints = {}) {
+  const fromCustomer = splitNameAndAddress(orderHints.customer || "");
+  const fallbackName =
+    `${fromCustomer.name || orderHints.customer || ""}`.trim();
+
   if (!orderHints.customer) {
-    return { extractedFacilityId: null, extractedFacilityName: "" };
+    return {
+      extractedFacilityId: null,
+      extractedFacilityName: "",
+      facilityReactivated: false,
+    };
   }
 
-  const { facility } = await resolveFacilityFromHints(orderHints, null, {
-    allowCreate: true,
-  });
-  const fromCustomer = splitNameAndAddress(orderHints.customer);
-  const extractedFacilityName =
-    facility?.facilityName ||
-    facility?.facility_name ||
-    fromCustomer.name ||
-    orderHints.customer ||
-    "";
+  try {
+    const { facility, reactivated } = await resolveFacilityFromHints(
+      orderHints,
+      null,
+      {
+        allowCreate: true,
+      }
+    );
+    const extractedFacilityName =
+      facility?.facilityName ||
+      facility?.facility_name ||
+      fallbackName;
 
-  return {
-    extractedFacilityId: facility?.id ? Number(facility.id) : null,
-    extractedFacilityName: `${extractedFacilityName}`.trim(),
-  };
+    return {
+      extractedFacilityId: facility?.id ? Number(facility.id) : null,
+      extractedFacilityName: `${extractedFacilityName}`.trim(),
+      facilityReactivated: Boolean(reactivated),
+    };
+  } catch (error) {
+    // Never block extract persistence / new-order autofill on facility create.
+    return {
+      extractedFacilityId: null,
+      extractedFacilityName: fallbackName,
+      facilityReactivated: false,
+    };
+  }
 }
 
 async function processBatchScan(file, uploadedBy, options = {}) {
@@ -289,8 +310,14 @@ async function processBatchScan(file, uploadedBy, options = {}) {
     const schema = result.schema_extraction || {};
     const mapped = mapSchemaToExtractRow(schema);
     const orderHints = enrichOrderHintsFromRow(mapSchemaToOrderHints(schema), mapped);
-    const { extractedFacilityId, extractedFacilityName } =
+    const { extractedFacilityId, extractedFacilityName, facilityReactivated } =
       await resolveExtractedFacilityMeta(orderHints);
+    if (extractedFacilityId) {
+      orderHints.facilityId = String(extractedFacilityId);
+      orderHints.facilityName = extractedFacilityName;
+      orderHints.facilityReactivated = Boolean(facilityReactivated);
+      orderHints.facilityCreated = false;
+    }
     const facilityMismatch = chosenFacilityId
       ? resolveFacilityMismatch(
           chosenFacilityId,
@@ -314,6 +341,7 @@ async function processBatchScan(file, uploadedBy, options = {}) {
       order_hints: orderHints,
       extracted_facility_id: extractedFacilityId,
       facility_mismatch: facilityMismatch,
+      facility_reactivated: Boolean(facilityReactivated),
     });
   }
 
@@ -410,6 +438,7 @@ async function processBatchScan(file, uploadedBy, options = {}) {
     orderHints: child.order_hints,
     extractedFacilityId: child.extracted_facility_id || null,
     facilityMismatch: Boolean(child.facility_mismatch),
+    facilityReactivated: Boolean(child.facility_reactivated),
     extractionConfidence: child.extraction_confidence,
   }));
 
@@ -493,12 +522,27 @@ async function processSingleSubpoena(file, uploadedBy) {
   }
 
   const extract = await getUnprocessedExtract(child.id);
+  const facilityReactivated = Boolean(child.facilityReactivated);
 
   return {
     extractId: child.id,
     parentId: result.parent.id,
-    extract,
-    orderHints: extract.orderHints,
+    extract: {
+      ...extract,
+      facilityReactivated,
+      facilityCreated: facilityReactivated ? false : extract.facilityCreated,
+      orderHints: {
+        ...(extract.orderHints || {}),
+        facilityReactivated,
+        ...(facilityReactivated
+          ? { facilityCreated: false }
+          : {}),
+      },
+    },
+    orderHints: {
+      ...(extract.orderHints || {}),
+      facilityReactivated,
+    },
     fileName: child.fileName,
     storagePath: child.storagePath,
   };

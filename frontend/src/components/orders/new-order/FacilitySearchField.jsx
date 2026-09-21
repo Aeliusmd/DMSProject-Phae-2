@@ -15,6 +15,7 @@ export default function FacilitySearchField({
   onCommit,
   facilityProfileIncomplete = false,
   facilityCreated = false,
+  facilityReactivated = false,
   returnToOrderPath = "",
   onBeforeFacilityProfileNavigate,
   resolving = false,
@@ -241,19 +242,27 @@ export default function FacilitySearchField({
 
       {facilityId && !facilityProfileIncomplete && !resolving && allowCreateFacility && (
         <p className="mt-[4px] text-[10px] font-medium text-[#059669]">
-          {facilityCreated ? "Facility added" : "Existing facility selected"}
+          {facilityReactivated
+            ? "Previously deleted facility restored and selected"
+            : facilityCreated
+              ? "Facility added"
+              : "Existing facility selected"}
         </p>
       )}
 
       {facilityId && facilityProfileIncomplete && !resolving && allowCreateFacility && (
         <div className="mt-2 rounded-[6px] border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2">
           <p className="text-[11px] font-semibold text-[#B45309]">
-            {facilityCreated
-              ? "Facility was automatically created"
-              : "Facility profile is incomplete"}
+            {facilityReactivated
+              ? "Previously deleted facility was restored"
+              : facilityCreated
+                ? "Facility was automatically created"
+                : "Facility profile is incomplete"}
           </p>
           <p className="mt-1 text-[10px] leading-snug text-[#92400E]">
-            Complete the facility details before continuing this order.
+            {facilityReactivated
+              ? "This facility was soft-deleted earlier and has been reactivated for this order. Complete the facility details before continuing."
+              : "Complete the facility details before continuing this order."}
           </p>
           <Link
             href={facilityInfoHref}

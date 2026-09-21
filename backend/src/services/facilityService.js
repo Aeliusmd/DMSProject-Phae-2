@@ -233,7 +233,29 @@ async function findOrCreateFacility(data, connection = null) {
     );
 
     if (existing) {
-      return { facility: mapFacilityRow(existing), created: false };
+      return {
+        facility: mapFacilityRow(existing),
+        created: false,
+        reactivated: false,
+      };
+    }
+
+    // Soft-deleted facility with the same name — revive instead of colliding
+    // on uq_facilities_user_name when generating a new username.
+    const inactive = await Facility.findInactiveByFacilityName(
+      facilityName,
+      connection
+    );
+    if (inactive?.id) {
+      await Facility.reactivate(inactive.id, connection);
+      const revived = await Facility.findById(inactive.id, connection);
+      if (revived) {
+        return {
+          facility: mapFacilityRow(revived),
+          created: false,
+          reactivated: true,
+        };
+      }
     }
 
     const userName = await generateUniqueFacilityUserName(facilityName);
@@ -255,7 +277,11 @@ async function findOrCreateFacility(data, connection = null) {
     const facilityId = await Facility.create(db, facilityPayload);
     const created = await Facility.findById(facilityId, connection);
 
-    return { facility: mapFacilityRow(created), created: true };
+    return {
+      facility: mapFacilityRow(created),
+      created: true,
+      reactivated: false,
+    };
   } finally {
     await releaseFacilityCreateLock(connection, lockKey);
   }
@@ -277,7 +303,7 @@ async function resolveFacilityFromHints(
   const facilityName = `${fromCustomer.name || hints.customer || hints.facilityName || ""}`.trim();
 
   if (!facilityName) {
-    return { facility: null, created: false };
+    return { facility: null, created: false, reactivated: false };
   }
 
   const addressSource =
@@ -311,20 +337,21 @@ async function resolveFacilityFromHints(
     return {
       facility: existing ? mapFacilityRow(existing) : null,
       created: false,
+      reactivated: false,
     };
   }
 
-  const { facility, created } = await findOrCreateFacility(
+  const { facility, created, reactivated } = await findOrCreateFacility(
     matchPayload,
     connection
   );
 
-  return { facility, created };
+  return { facility, created, reactivated: Boolean(reactivated) };
 }
 
 async function resolveFacilityByName(data = {}) {
-  const { facility, created } = await findOrCreateFacility(data);
-  return { facility, created };
+  const { facility, created, reactivated } = await findOrCreateFacility(data);
+  return { facility, created, reactivated: Boolean(reactivated) };
 }
 
 function buildFacilityDbPayload(data, credentials = null) {

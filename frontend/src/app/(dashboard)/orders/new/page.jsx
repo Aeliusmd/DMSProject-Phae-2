@@ -392,12 +392,14 @@ function NewOrderPageContent() {
   const [extractionMeta, setExtractionMeta] = useState({
     facilityName: "",
     facilityCreated: false,
+    facilityReactivated: false,
     extractedDoctorName: "",
     providerName: "",
     providerCreated: false,
   });
   const [facilityProfileIncomplete, setFacilityProfileIncomplete] = useState(false);
   const [facilityCreated, setFacilityCreated] = useState(false);
+  const [facilityReactivated, setFacilityReactivated] = useState(false);
   const [resolvingFacility, setResolvingFacility] = useState(false);
   const [matchedFacilities, setMatchedFacilities] = useState([]);
   const [missingDefaultDoctor, setMissingDefaultDoctor] = useState(false);
@@ -565,6 +567,7 @@ function NewOrderPageContent() {
     markCommittedFacility(resolved.facilityId, resolved.facilityName);
     setFacilityProfileIncomplete(resolved.facilityProfileIncomplete);
     setFacilityCreated(resolved.facilityCreated);
+    setFacilityReactivated(Boolean(resolved.facilityReactivated));
     if (draft.extractionMeta) {
       setExtractionMeta(draft.extractionMeta);
     } else {
@@ -572,6 +575,7 @@ function NewOrderPageContent() {
         ...prev,
         facilityName: resolved.facilityName,
         facilityCreated: resolved.facilityCreated,
+        facilityReactivated: Boolean(resolved.facilityReactivated),
       }));
     }
     if (doctorResolved) {
@@ -702,12 +706,14 @@ function NewOrderPageContent() {
           setExtractionMeta({
             facilityName: "",
             facilityCreated: false,
+            facilityReactivated: false,
             extractedDoctorName: "",
             providerName: "",
             providerCreated: false,
           });
           setFacilityProfileIncomplete(false);
           setFacilityCreated(false);
+          setFacilityReactivated(false);
           setMissingDefaultDoctor(false);
           setDoctorCreated(false);
           setEditSubpoenaSrc("");
@@ -1012,6 +1018,7 @@ function NewOrderPageContent() {
         markCommittedFacility(nextForm.facility, nextForm.facilityName);
         setFacilityProfileIncomplete(profileIncomplete);
         setFacilityCreated(facilityWasCreated);
+        setFacilityReactivated(false);
         if (isReturnFromFacilityEdit && draftFacility?.extractionMeta) {
           setExtractionMeta(draftFacility.extractionMeta);
         } else {
@@ -1019,6 +1026,7 @@ function NewOrderPageContent() {
             ...prev,
             facilityName: facilityLabel,
             facilityCreated: facilityWasCreated,
+            facilityReactivated: false,
           }));
         }
         setTouched({});
@@ -1377,6 +1385,7 @@ function NewOrderPageContent() {
     if (formUpdates.facility) {
       setFacilityProfileIncomplete(Boolean(meta.facilityProfileIncomplete));
       setFacilityCreated(Boolean(meta.facilityCreated));
+      setFacilityReactivated(Boolean(meta.facilityReactivated));
       markCommittedFacility(
         formUpdates.facility,
         formUpdates.facilityName || meta.facilityName || ""
@@ -1412,10 +1421,12 @@ function NewOrderPageContent() {
         ...nextMeta,
         facilityName: unresolvedFacilityName,
         facilityCreated: false,
+        facilityReactivated: false,
       };
       clearCommittedFacility();
       setFacilityProfileIncomplete(false);
       setFacilityCreated(false);
+      setFacilityReactivated(false);
     }
 
     const facilityIdForDoctor = `${nextUpdates.facility || formUpdates.facility || ""}`.trim();
@@ -1694,6 +1705,7 @@ function NewOrderPageContent() {
     if (!facilityName && !facilityId) {
       setFacilityProfileIncomplete(false);
       setFacilityCreated(false);
+      setFacilityReactivated(false);
       setMissingDefaultDoctor(false);
       setDoctorCreated(false);
       return null;
@@ -1703,10 +1715,12 @@ function NewOrderPageContent() {
       // Typed name only — do not auto-create; staff uses Add facility link.
       setFacilityProfileIncomplete(false);
       setFacilityCreated(false);
+      setFacilityReactivated(false);
       return {
         facilityId: "",
         facilityName,
         facilityCreated: false,
+        facilityReactivated: false,
         facilityProfileIncomplete: false,
         needsFacilityAdd: true,
       };
@@ -1761,6 +1775,7 @@ function NewOrderPageContent() {
       markCommittedFacility(resolved.facilityId, resolved.facilityName);
       setFacilityProfileIncomplete(resolved.facilityProfileIncomplete);
       setFacilityCreated(resolved.facilityCreated);
+      setFacilityReactivated(Boolean(resolved.facilityReactivated));
 
       const keepSubpoenaDoctorContext =
         extractionMetaRef.current.facilityName &&
@@ -1774,6 +1789,7 @@ function NewOrderPageContent() {
           ...prev,
           facilityName: resolved.facilityName,
           facilityCreated: resolved.facilityCreated,
+          facilityReactivated: Boolean(resolved.facilityReactivated),
           ...(keepSubpoenaDoctorContext
             ? {}
             : { extractedDoctorName: "", doctorCreated: false }),
@@ -1784,6 +1800,7 @@ function NewOrderPageContent() {
           ...prev,
           facilityName: resolved.facilityName,
           facilityCreated: resolved.facilityCreated,
+          facilityReactivated: Boolean(resolved.facilityReactivated),
         }));
       }
 
@@ -1856,11 +1873,13 @@ function NewOrderPageContent() {
       ...prev,
       facilityName: "",
       facilityCreated: false,
+      facilityReactivated: false,
       extractedDoctorName: "",
       doctorCreated: false,
     }));
     setFacilityProfileIncomplete(false);
     setFacilityCreated(false);
+    setFacilityReactivated(false);
     setMissingDefaultDoctor(false);
     setDoctorCreated(false);
     setFormDataAndRef((prev) => ({
@@ -2178,7 +2197,12 @@ function NewOrderPageContent() {
     });
 
     if (name === "facility") {
-      setExtractionMeta((prev) => ({ ...prev, facilityName: "", facilityCreated: false }));
+      setExtractionMeta((prev) => ({
+        ...prev,
+        facilityName: "",
+        facilityCreated: false,
+        facilityReactivated: false,
+      }));
     }
   };
 
@@ -2285,12 +2309,14 @@ function NewOrderPageContent() {
       setExtractionMeta({
         facilityName: "",
         facilityCreated: false,
+        facilityReactivated: false,
         extractedDoctorName: "",
         providerName: "",
         providerCreated: false,
       });
       setFacilityProfileIncomplete(false);
       setFacilityCreated(false);
+      setFacilityReactivated(false);
       setMissingDefaultDoctor(false);
       setDoctorCreated(false);
       clearCommittedFacility();
@@ -2390,12 +2416,14 @@ function NewOrderPageContent() {
     setExtractionMeta({
       facilityName: "",
       facilityCreated: false,
+      facilityReactivated: false,
       extractedDoctorName: "",
       providerName: "",
       providerCreated: false,
     });
     setFacilityProfileIncomplete(false);
     setFacilityCreated(false);
+    setFacilityReactivated(false);
     setMissingDefaultDoctor(false);
     setDoctorCreated(false);
     setExtractError("");
@@ -2769,6 +2797,7 @@ function NewOrderPageContent() {
                 extractionMeta={extractionMeta}
                 facilityProfileIncomplete={facilityProfileIncomplete}
                 facilityCreated={facilityCreated}
+                facilityReactivated={facilityReactivated}
                 resolvingFacility={resolvingFacility}
                 onFacilityInput={handleFacilityInput}
                 onFacilitySelect={handleFacilitySelect}
@@ -2936,6 +2965,7 @@ function OrderDetailsForm({
   extractionMeta = {},
   facilityProfileIncomplete = false,
   facilityCreated = false,
+  facilityReactivated = false,
   resolvingFacility = false,
   onFacilityInput,
   onFacilitySelect,
@@ -2975,7 +3005,8 @@ function OrderDetailsForm({
     formData.facility &&
     formData.creationSource !== "personal_portal" &&
     !facilityProfileIncomplete &&
-    !facilityCreated
+    !facilityCreated &&
+    !facilityReactivated
       ? `Matched from subpoena: ${extractionMeta.facilityName}`
       : "";
 
@@ -3025,6 +3056,7 @@ function OrderDetailsForm({
               allowCreateFacility && facilityProfileIncomplete
             }
             facilityCreated={facilityCreated}
+            facilityReactivated={facilityReactivated}
             returnToOrderPath={returnToOrderPath}
             onBeforeFacilityProfileNavigate={onBeforeFacilityProfileNavigate}
             allowCreateFacility={allowCreateFacility}
