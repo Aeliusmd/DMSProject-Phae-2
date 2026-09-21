@@ -402,6 +402,7 @@ function NewOrderPageContent() {
   const [facilityReactivated, setFacilityReactivated] = useState(false);
   const [resolvingFacility, setResolvingFacility] = useState(false);
   const [matchedFacilities, setMatchedFacilities] = useState([]);
+  const [clickedMatchFacilityId, setClickedMatchFacilityId] = useState("");
   const [missingDefaultDoctor, setMissingDefaultDoctor] = useState(false);
   const [doctorCreated, setDoctorCreated] = useState(false);
   const [resolvingDoctor, setResolvingDoctor] = useState(false);
@@ -1499,6 +1500,7 @@ function NewOrderPageContent() {
           facilityList = await getFacilities();
           setFacilities(facilityList);
         }
+        setClickedMatchFacilityId("");
         setMatchedFacilities(
           findSimilarFacilities(extractedFacilityName, facilityList, {
             minScore: 0.8,
@@ -1507,9 +1509,11 @@ function NewOrderPageContent() {
         );
       } else {
         setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
       }
     } catch {
       setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
     }
 
     const draftFacilityId = `${nextUpdates.facility || formUpdates.facility || ""}`.trim();
@@ -1872,6 +1876,8 @@ function NewOrderPageContent() {
     if (isOrderReadOnly) return;
     clearCommittedFacility();
     setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
+    setClickedMatchFacilityId("");
     setExtractionMeta((prev) => ({
       ...prev,
       facilityName: "",
@@ -1929,6 +1935,7 @@ function NewOrderPageContent() {
 
     if (!fromMatchList) {
       setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
     }
     setFormDataAndRef(next);
     syncFacilityFromForm(next, { facilityChanged, fromMatchList });
@@ -1936,6 +1943,7 @@ function NewOrderPageContent() {
 
   const handleMatchedFacilitySelect = (facility) => {
     if (isOrderReadOnly || !facility) return;
+    setClickedMatchFacilityId(String(facility.id));
     handleFacilitySelect(facility, { fromMatchList: true });
   };
 
@@ -2311,6 +2319,7 @@ function NewOrderPageContent() {
       setEditSubpoenaSrc("");
       setEditSubpoenaError("");
       setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
       setExtractionMeta({
         facilityName: "",
         facilityCreated: false,
@@ -2386,6 +2395,7 @@ function NewOrderPageContent() {
       setEditSubpoenaSrc("");
       setEditSubpoenaError("");
       setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
     }
   };
 
@@ -2435,6 +2445,7 @@ function NewOrderPageContent() {
     setEditSubpoenaSrc("");
     setEditSubpoenaError("");
     setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
     clearCommittedFacility();
     setFileErrors((prev) => {
       const next = { ...prev };
@@ -2616,6 +2627,7 @@ function NewOrderPageContent() {
           resolvedFacility?.facilityName || syncedFormData.facilityName
         );
         setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
         clearDraftOrderSession(draftScope);
         draftRestoredRef.current = false;
         router.push(resolveListPath(syncedFormData.creationSource));
@@ -2625,6 +2637,7 @@ function NewOrderPageContent() {
       const order = await createOrder(syncedFormData);
       if (order?.id) {
         setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
         clearDraftOrderSession(draftScope);
         draftRestoredRef.current = false;
         router.push(resolveListPath(syncedFormData.creationSource));
@@ -2811,6 +2824,7 @@ function NewOrderPageContent() {
                 onFacilityBlur={handleFacilityBlur}
                 onFacilityCommit={handleFacilityCommit}
                 matchedFacilities={matchedFacilities}
+                clickedMatchFacilityId={clickedMatchFacilityId}
                 onMatchedFacilitySelect={handleMatchedFacilitySelect}
                 returnToOrderPath={returnToOrderPath}
                 onBeforeFacilityProfileNavigate={persistOrderDraft}
@@ -2979,6 +2993,7 @@ function OrderDetailsForm({
   onFacilityBlur,
   onFacilityCommit,
   matchedFacilities = [],
+  clickedMatchFacilityId = "",
   onMatchedFacilitySelect,
   returnToOrderPath = "",
   onBeforeFacilityProfileNavigate,
@@ -3097,30 +3112,29 @@ function OrderDetailsForm({
                     facility.facilityName ||
                     facility.name ||
                     `Facility ${facility.id}`;
-                  const isSelected =
-                    String(formData.facility || "") === String(facility.id);
+                  const filledInInput =
+                    String(formData.facility || "") === String(facility.id) &&
+                    String(clickedMatchFacilityId || "") === String(facility.id);
                   return (
                     <li key={facility.id}>
                       <button
                         type="button"
                         onClick={() => onMatchedFacilitySelect?.(facility)}
-                        aria-pressed={isSelected}
+                        aria-pressed={filledInInput}
                         className={`flex w-full items-center gap-2 rounded-[5px] border px-2.5 py-1.5 text-left text-[12px] transition ${
-                          isSelected
+                          filledInInput
                             ? "border-[#0097B2] bg-[#ECFEFF] text-[#0F766E]"
                             : "border-[#E0F2FE] bg-white text-[#334155] hover:border-[#67D8E8] hover:bg-[#F8FBFC]"
                         }`}
                       >
-                        <span
-                          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
-                            isSelected
-                              ? "border-[#059669] bg-[#059669] text-white"
-                              : "border-[#CBD5E1] bg-white text-transparent"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          ✓
-                        </span>
+                        {filledInInput ? (
+                          <span
+                            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[#059669] bg-[#059669] text-[10px] font-bold text-white"
+                            aria-hidden="true"
+                          >
+                            ✓
+                          </span>
+                        ) : null}
                         <span className="min-w-0 truncate font-medium">
                           {label}
                         </span>
