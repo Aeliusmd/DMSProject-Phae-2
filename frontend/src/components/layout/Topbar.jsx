@@ -132,9 +132,9 @@ export default function Topbar({ onToggleSidebar, sidebarExpanded = false }) {
           </Link>
         ) : null}
 
-        <button
-          type="button"
-          className="flex shrink-0 items-center gap-[7px] rounded-[6px] px-1 py-1 hover:bg-[#F8FAFC] sm:gap-[9px]"
+        <div
+          className="flex cursor-default select-none items-center gap-[7px] px-1 py-1 sm:gap-[9px]"
+          aria-label={`Signed in as ${displayName}`}
         >
           <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[#BDECF3] text-[11px] font-medium text-[#007F96]">
             {initials}
@@ -143,7 +143,7 @@ export default function Topbar({ onToggleSidebar, sidebarExpanded = false }) {
           <p className="hidden text-[13px] font-medium text-[#111827] sm:block">
             {displayName}
           </p>
-        </button>
+        </div>
       </div>
     </header>
   );
