@@ -94,12 +94,15 @@ function isUploadsRelativePath(relativePath) {
     normalized.startsWith("unprocessed-subpoenas/") ||
     normalized.startsWith("additional-documents/") ||
     normalized.startsWith("notes_attachments/") ||
-    normalized.startsWith("medical-records/")
+    normalized.startsWith("medical-records/") ||
+    normalized.startsWith("facilities/") ||
+    normalized.startsWith("personal-portal/")
   );
 }
 
 /**
- * Copy a batch-scan subpoena PDF from FILE_SERVER into uploads/processed/.
+ * Copy a batch-scan subpoena PDF from FILE_SERVER/Order/BatchScan/
+ * into FILE_SERVER/uploads/processed/.
  * The source remains available if the surrounding database transaction fails
  * and the extract needs to be retried.
  * Returns the relative path stored on orders.subpoena_storage_path.

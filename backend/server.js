@@ -4,7 +4,7 @@ process.env.TZ = "UTC";
 const app = require("./src/app");
 const config = require("./src/config");
 const { connectDatabase } = require("./src/config/database");
-const { ensureUploadDirs } = require("./src/config/uploads");
+const { ensureUploadDirs, uploadsRoot } = require("./src/config/uploads");
 const { ensureFileServerReady } = require("./src/utils/fileStorage");
 const logger = require("./src/utils/logger");
 const { startEmployeeReactivationJob } = require("./src/jobs/employeeReactivationJob");
@@ -21,12 +21,13 @@ async function startServer() {
       try {
         const root = ensureFileServerReady();
         logger.info(`FILE_SERVER ready: ${root}`);
+        logger.info(`Uploads root: ${uploadsRoot}`);
       } catch (err) {
         logger.warn(`FILE_SERVER warning: ${err.message}`);
       }
     } else {
       logger.warn(
-        "FILE_SERVER is not set — batch scan uploads will fail until configured"
+        "FILE_SERVER is not set — using local backend/uploads; batch scan and company portal will fail until configured"
       );
     }
 

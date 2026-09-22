@@ -9,6 +9,7 @@ const path = require("path");
 const Stripe = require("stripe");
 
 const config = require("../config");
+const { uploadsRoot } = require("../config/uploads");
 const { calendarTodayInTimezone } = require("../utils/timezoneUtils");
 
 function businessCalendarToday() {
@@ -100,7 +101,6 @@ function addLookupExpiry(fromDate = new Date()) {
 
 function toRelativeLicensePath(file) {
   if (!file?.path) return null;
-  const uploadsRoot = path.join(__dirname, "..", "..", "uploads");
   const relative = path.relative(uploadsRoot, file.path).replace(/\\/g, "/");
   return relative || null;
 }

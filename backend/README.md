@@ -25,7 +25,7 @@ backend/
 ├── tests/
 │   ├── unit/
 │   └── integration/
-├── uploads/                  # Document storage
+├── (uploads live under FILE_SERVER/uploads — not in this repo)
 │   ├── documents/
 │   └── temp/
 └── logs/

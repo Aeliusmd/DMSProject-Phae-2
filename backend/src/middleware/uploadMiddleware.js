@@ -3,24 +3,29 @@ const path = require("path");
 const multer = require("multer");
 const { randomUUID } = require("crypto");
 const ApiError = require("../utils/ApiError");
-const { facilityUploadsDir, ensureUploadDirs } = require("../config/uploads");
+const {
+  uploadsRoot,
+  facilityUploadsDir,
+  ensureUploadDirs,
+} = require("../config/uploads");
 
 /**
  * Facility document uploads:
  * Stored inside facility-specific folder:
- * uploads/facilities/<facilityId>/
+ * {FILE_SERVER}/uploads/facilities/<facilityId>/
  */
 
 /**
- * Order document uploads:
- * Stored inside:
- * uploads/unprocessed-subpoenas/
- * uploads/processed/
- * uploads/additional-documents/
- * uploads/notes_attachments/
+ * Order document uploads (under FILE_SERVER/uploads):
+ * unprocessed-subpoenas/
+ * processed/
+ * additional-documents/
+ * notes_attachments/
+ * medical-records/
+ * personal-portal/licenses/
  */
 
-const ORDER_UPLOADS_ROOT = path.join(__dirname, "..", "..", "uploads");
+const ORDER_UPLOADS_ROOT = uploadsRoot;
 
 const ORDER_UPLOAD_DIRS = {
   unprocessedSubpoenas: path.join(ORDER_UPLOADS_ROOT, "unprocessed-subpoenas"),
