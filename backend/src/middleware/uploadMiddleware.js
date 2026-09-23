@@ -17,15 +17,15 @@ const {
 
 /**
  * Order document uploads (under FILE_SERVER/uploads):
- * processed-subpoena/{employeeId}/{orderId}/
- * additional-documents/{employeeId}/{orderId}/
- * notes_attachments/{employeeId}/{orderId}/
- * medical-records/{employeeId}/{orderId}/
+ * processed-subpoena/{employeeId}/{orderNumber}/
+ * additional-documents/{employeeId}/{orderNumber}/
+ * notes_attachments/{employeeId}/{orderNumber}/
+ * medical-records/{employeeId}/{orderNumber}/
  * personal-portal/licenses/
  *
  * Employee folders are created on first file write, not at user creation.
- * Order folders are created when the order id is known (update/notes/records).
- * New-order creates write under {employeeId}/ first, then move into {orderId}/.
+ * Order-number folders are created when the order number is known.
+ * Multer writes under {employeeId}/ first; the file is then moved into {orderNumber}/.
  */
 
 const ORDER_UPLOADS_ROOT = uploadsRoot;
@@ -49,17 +49,8 @@ function resolveUploaderFolderId(req) {
   return Number.isFinite(id) && id > 0 ? String(id) : "system";
 }
 
-function resolveRequestOrderFolderId(req) {
-  const id = Number(req?.params?.id);
-  return Number.isFinite(id) && id > 0 ? String(id) : null;
-}
-
 function staffUploadDir(typeRoot, req) {
-  const userFolder = resolveUploaderFolderId(req);
-  const orderFolder = resolveRequestOrderFolderId(req);
-  const dir = orderFolder
-    ? path.join(typeRoot, userFolder, orderFolder)
-    : path.join(typeRoot, userFolder);
+  const dir = path.join(typeRoot, resolveUploaderFolderId(req));
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

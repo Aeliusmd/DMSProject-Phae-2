@@ -106,9 +106,15 @@ function resolveStaffFolderId(employeeId) {
   return Number.isFinite(id) && id > 0 ? String(id) : "system";
 }
 
-function resolveOrderFolderId(orderId) {
-  const id = Number(orderId);
-  return Number.isFinite(id) && id > 0 ? String(id) : null;
+function resolveOrderNumberFolder(orderNumber) {
+  const raw = String(orderNumber || "").trim();
+  if (!raw) return null;
+  const safe = raw
+    .replace(/[^\w.\-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 80);
+  return safe || null;
 }
 
 const ORDER_SCOPED_UPLOAD_ROOTS = new Set([
@@ -119,9 +125,9 @@ const ORDER_SCOPED_UPLOAD_ROOTS = new Set([
   "medical-records",
 ]);
 
-function staffOrderUploadDir(typeRoot, employeeId, orderId) {
+function staffOrderUploadDir(typeRoot, employeeId, orderNumber) {
   const folderId = resolveStaffFolderId(employeeId);
-  const orderFolder = resolveOrderFolderId(orderId);
+  const orderFolder = resolveOrderNumberFolder(orderNumber);
   const dir = orderFolder
     ? path.join(typeRoot, folderId, orderFolder)
     : path.join(typeRoot, folderId);
@@ -131,14 +137,14 @@ function staffOrderUploadDir(typeRoot, employeeId, orderId) {
 
 /**
  * Move a staff upload from {type}/{employeeId}/file into
- * {type}/{employeeId}/{orderId}/file after the order id is known.
+ * {type}/{employeeId}/{orderNumber}/file after the order number is known.
  * Already-nested paths and unknown/legacy locations are left unchanged.
  */
-function moveUploadToOrderFolder(relativePath, employeeId, orderId) {
+function moveUploadToOrderFolder(relativePath, employeeId, orderNumber) {
   if (!relativePath) return relativePath;
 
   const normalized = String(relativePath).replace(/\\/g, "/");
-  const orderFolder = resolveOrderFolderId(orderId);
+  const orderFolder = resolveOrderNumberFolder(orderNumber);
   if (!normalized || !orderFolder) return normalized;
 
   const parts = normalized.split("/").filter(Boolean);
@@ -146,7 +152,7 @@ function moveUploadToOrderFolder(relativePath, employeeId, orderId) {
     return normalized;
   }
 
-  // type/userId/orderId/file — already nested (including shared split-order files)
+  // type/userId/orderNumber/file — already nested (including shared split-order files)
   if (parts.length >= 4) {
     return normalized;
   }
@@ -173,17 +179,15 @@ function moveUploadToOrderFolder(relativePath, employeeId, orderId) {
 
 /**
  * Copy a batch-scan subpoena PDF from FILE_SERVER/Order/BatchScan/
- * into FILE_SERVER/uploads/processed-subpoena/{employeeId}/{orderId}/.
- * When orderId is not yet known, writes under {employeeId}/ and the caller
- * moves it after insert. The source remains available if the surrounding
- * database transaction fails and the extract needs to be retried.
+ * into FILE_SERVER/uploads/processed-subpoena/{employeeId}/{orderNumber}/.
+ * The source remains available if the surrounding database transaction fails
+ * and the extract needs to be retried.
  * Returns the relative path stored on orders.subpoena_storage_path.
  */
 function archiveBatchScanSubpoenaToProcessed(
   batchScanRelativePath,
   orderNumber,
-  employeeId,
-  orderId
+  employeeId
 ) {
   const sourceAbsolute = resolveAbsolutePath(batchScanRelativePath);
   if (!fs.existsSync(sourceAbsolute)) {
@@ -194,18 +198,18 @@ function archiveBatchScanSubpoenaToProcessed(
   const destDir = staffOrderUploadDir(
     ORDER_UPLOAD_DIRS.processedSubpoena,
     employeeId,
-    orderId
+    orderNumber
   );
 
   const stem = path.basename(batchScanRelativePath, path.extname(batchScanRelativePath));
   const safeStem = stem.replace(/[^\w.\-]+/g, "_").slice(0, 80) || "subpoena";
-  const safeOrder = String(orderNumber || "order").replace(/[^\w.\-]+/g, "_");
+  const safeOrder = resolveOrderNumberFolder(orderNumber) || "order";
   const fileName = `${safeOrder}_${Date.now()}_${safeStem}.pdf`;
   const destAbsolute = path.join(destDir, fileName);
 
   fs.copyFileSync(sourceAbsolute, destAbsolute);
 
-  const orderFolder = resolveOrderFolderId(orderId);
+  const orderFolder = resolveOrderNumberFolder(orderNumber);
   const relative = orderFolder
     ? `processed-subpoena/${folderId}/${orderFolder}/${fileName}`
     : `processed-subpoena/${folderId}/${fileName}`;
@@ -257,7 +261,7 @@ module.exports = {
   resolveAbsolutePath,
   isUploadsRelativePath,
   resolveOrderStorageAbsolutePath,
-  resolveOrderFolderId,
+  resolveOrderNumberFolder,
   moveUploadToOrderFolder,
   archiveBatchScanSubpoenaToProcessed,
   deleteUnusedProcessedSubpoenaUpload,

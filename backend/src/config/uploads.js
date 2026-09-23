@@ -8,10 +8,10 @@ const config = require("./index");
  *
  * Layout:
  *   {FILE_SERVER}/uploads/facilities/{facilityId}/
- *   {FILE_SERVER}/uploads/processed-subpoena/{employeeId}/{orderId}/
- *   {FILE_SERVER}/uploads/additional-documents/{employeeId}/{orderId}/
- *   {FILE_SERVER}/uploads/notes_attachments/{employeeId}/{orderId}/
- *   {FILE_SERVER}/uploads/medical-records/{employeeId}/{orderId}/
+ *   {FILE_SERVER}/uploads/processed-subpoena/{employeeId}/{orderNumber}/
+ *   {FILE_SERVER}/uploads/additional-documents/{employeeId}/{orderNumber}/
+ *   {FILE_SERVER}/uploads/notes_attachments/{employeeId}/{orderNumber}/
+ *   {FILE_SERVER}/uploads/medical-records/{employeeId}/{orderNumber}/
  *   {FILE_SERVER}/uploads/personal-portal/licenses/
  *
  * Legacy files under {employeeId}/ (no order folder) remain readable.

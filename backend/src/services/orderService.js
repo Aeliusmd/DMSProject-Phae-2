@@ -497,15 +497,15 @@ function resolveOrderSubpoenaAbsolutePath(storagePath) {
   return fileStorage.resolveAbsolutePath(normalized);
 }
 
-function nestOrderUploadPath(relativePath, actorId, orderId) {
-  return fileStorage.moveUploadToOrderFolder(relativePath, actorId, orderId);
+function nestOrderUploadPath(relativePath, actorId, orderNumber) {
+  return fileStorage.moveUploadToOrderFolder(relativePath, actorId, orderNumber);
 }
 
 async function nestAndPersistSubpoenaPath(
   connection,
-  { orderId, storagePath, actorId }
+  { orderId, orderNumber, storagePath, actorId }
 ) {
-  const nestedPath = nestOrderUploadPath(storagePath, actorId, orderId);
+  const nestedPath = nestOrderUploadPath(storagePath, actorId, orderNumber);
   if (nestedPath && nestedPath !== storagePath) {
     await connection.execute(
       `UPDATE orders
@@ -2179,7 +2179,7 @@ async function addOrderNote(orderId, data, actorId, file, options = {}) {
   const attachmentPath = nestOrderUploadPath(
     toRelativeStoragePath(file),
     actorId,
-    order.id
+    order.order_number
   );
 
   const noteId = await Order.createNote({
@@ -2277,7 +2277,7 @@ async function updateOrderNote(orderId, noteId, data, actorId, file, options = {
   const attachmentPath = nestOrderUploadPath(
     toRelativeStoragePath(file),
     actorId,
-    order.id
+    order.order_number
   );
   const callbackAt = resolveCallbackAtUtc(data.callbackDate, timeZone);
 
@@ -2503,7 +2503,7 @@ async function updateOrderWorkflowStage(orderId, stageName, stageStatus) {
 
 async function saveOrderDocuments(
   connection,
-  { orderId, additionalDocFile, documentName, actorId }
+  { orderId, orderNumber, additionalDocFile, documentName, actorId }
 ) {
   // A subpoena uploaded with an order is stored directly on the order
   // (orders.subpoena_storage_path). The unprocessed_subpoenas table is
@@ -2518,7 +2518,7 @@ async function saveOrderDocuments(
       storagePath: nestOrderUploadPath(
         toRelativeStoragePath(additionalDocFile),
         actorId,
-        orderId
+        orderNumber
       ),
       fileSizeBytes: additionalDocFile.size || null,
       uploadedBy: actorId || null,
@@ -3040,6 +3040,7 @@ async function createOrder(data, actorId, files, options = {}) {
       if (subpoenaStoragePath) {
         subpoenaStoragePath = await nestAndPersistSubpoenaPath(connection, {
           orderId,
+          orderNumber,
           storagePath: subpoenaStoragePath,
           actorId,
         });
@@ -3057,6 +3058,7 @@ async function createOrder(data, actorId, files, options = {}) {
         await syncOrderPayments(connection, orderId, typedInput);
         await saveOrderDocuments(connection, {
           orderId,
+          orderNumber,
           additionalDocFile,
           documentName: typedInput.documentName,
           actorId,
@@ -3585,8 +3587,7 @@ async function updateOrder(id, data, actorId, files) {
         subpoenaStoragePath = fileStorage.archiveBatchScanSubpoenaToProcessed(
           linkedExtract.storage_path,
           orderNumber,
-          actorId,
-          existing.id
+          actorId
         );
         fileStorage.deleteUnusedProcessedSubpoenaUpload(
           toRelativeStoragePath(subpoenaFile),
@@ -3599,7 +3600,7 @@ async function updateOrder(id, data, actorId, files) {
       const newSubpoenaPath = nestOrderUploadPath(
         toRelativeStoragePath(subpoenaFile),
         actorId,
-        existing.id
+        orderNumber
       );
       subpoenaStoragePath =
         newSubpoenaPath || existing.subpoena_storage_path || null;
@@ -3677,6 +3678,7 @@ async function updateOrder(id, data, actorId, files) {
 
     await saveOrderDocuments(connection, {
       orderId: existing.id,
+      orderNumber,
       additionalDocFile,
       documentName: data.documentName,
       actorId,
@@ -3956,7 +3958,7 @@ async function scanMedicalRecords(
         storagePath: nestOrderUploadPath(
           toRelativeStoragePath(file),
           actorId,
-          orderId
+          existing.order_number
         ),
         originalFileName: file.originalname || null,
         pageCount,
