@@ -2602,32 +2602,10 @@ async function resolveOrderNumber(
     });
     const normalizedTypes = Patient.normalizeRecordTypes(recordTypes);
 
-    // Existing DMS patient order: rebuild number from current record types
-    // (e.g. medical → 0001-1, medical+billing → 0001-1-2).
+    // Existing DMS patient order: keep the stored number.
+    // Rebuilding from record types (e.g. other → 0001-5) collides with
+    // sibling split orders when this row used a sequence fallback (0001-2).
     if (existingPatientId && existingNumber && !isPendingAutoOrderNumber(existingNumber)) {
-      const patient = await Patient.findById(connection, existingPatientId);
-      if (patient) {
-        const rebuiltNumber = Patient.formatOrderNumber(
-          patient.patient_number,
-          normalizedTypes,
-          existingSequence
-        );
-        if (rebuiltNumber !== existingNumber) {
-          await assertOrderNumberAvailable(
-            rebuiltNumber,
-            excludeId,
-            normalizedTypes,
-            connection
-          );
-        }
-        return {
-          orderNumber: rebuiltNumber,
-          patientId: existingPatientId,
-          patientOrderSequence: existingSequence,
-          suppliedExternalNumber,
-        };
-      }
-
       return {
         orderNumber: existingNumber,
         patientId: existingPatientId,
