@@ -18,7 +18,7 @@ module.exports = {
     : "",
   subpoenaExtraction: {
     apiUrl: process.env.SUBPOENA_EXTRACTION_API_URL || "",
-    timeoutMs: Number(process.env.SUBPOENA_EXTRACTION_TIMEOUT_MS) || 300000,
+    timeoutMs: Number(process.env.SUBPOENA_EXTRACTION_TIMEOUT_MS) || 600000,
   },
 
   jwt: {

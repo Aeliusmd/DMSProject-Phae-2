@@ -87,7 +87,7 @@ const nextConfig: NextConfig = {
   // Batch scan + subpoena extraction can take >30s; default rewrite proxy
   // timeout causes "socket hang up" before the backend responds.
   experimental: {
-    proxyTimeout: 300_000,
+    proxyTimeout: 600_000,
   },
   async rewrites() {
     const backendOrigin = getBackendOrigin();
