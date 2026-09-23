@@ -163,6 +163,23 @@ class Facility {
     return rows;
   }
 
+  static async findBySlug(slug, connection = null) {
+    const db = connection || getPool();
+    const trimmed = `${slug || ""}`.trim();
+    if (!trimmed) return null;
+
+    const [rows] = await db.execute(
+      `SELECT *
+       FROM facilities
+       WHERE slug = :slug
+       ORDER BY is_active DESC, id DESC
+       LIMIT 1`,
+      { slug: trimmed }
+    );
+
+    return rows[0] || null;
+  }
+
   static async findBestMatch(
     { facilityName, city = "", state = "", zipCode = "", zip: zipInput = "" } = {},
     connection = null

@@ -208,6 +208,34 @@ async function releaseFacilityCreateLock(connection, lockKey) {
   await connection.execute(`SELECT RELEASE_LOCK(:lockKey)`, { lockKey });
 }
 
+function isFacilitySlugConflict(error) {
+  const raw = error?.cause || error;
+  if (raw?.code !== "ER_DUP_ENTRY") return false;
+  return /uq_facilities_slug/i.test(`${raw.message || raw.sqlMessage || ""}`);
+}
+
+async function reuseExistingFacility(row, connection = null) {
+  if (!row?.id) return null;
+
+  if (Number(row.is_active) === 0) {
+    await Facility.reactivate(row.id, connection);
+    const revived = await Facility.findById(row.id, connection);
+    if (revived) {
+      return {
+        facility: mapFacilityRow(revived),
+        created: false,
+        reactivated: true,
+      };
+    }
+  }
+
+  return {
+    facility: mapFacilityRow(row),
+    created: false,
+    reactivated: false,
+  };
+}
+
 async function findOrCreateFacility(data, connection = null) {
   const facilityName = sanitizeText(data.facilityName, {
     maxLength: 200,
@@ -258,6 +286,15 @@ async function findOrCreateFacility(data, connection = null) {
       }
     }
 
+    const existingBySlug = await Facility.findBySlug(
+      slugify(facilityName),
+      connection
+    );
+    const reusedBySlug = await reuseExistingFacility(existingBySlug, connection);
+    if (reusedBySlug) {
+      return reusedBySlug;
+    }
+
     const userName = await generateUniqueFacilityUserName(facilityName);
     const passwordHash = await generateInternalPasswordHash();
     const facilityPayload = buildFacilityDbPayload(
@@ -274,14 +311,27 @@ async function findOrCreateFacility(data, connection = null) {
     );
 
     const db = connection || getPool();
-    const facilityId = await Facility.create(db, facilityPayload);
-    const created = await Facility.findById(facilityId, connection);
+    try {
+      const facilityId = await Facility.create(db, facilityPayload);
+      const created = await Facility.findById(facilityId, connection);
 
-    return {
-      facility: mapFacilityRow(created),
-      created: true,
-      reactivated: false,
-    };
+      return {
+        facility: mapFacilityRow(created),
+        created: true,
+        reactivated: false,
+      };
+    } catch (error) {
+      if (isFacilitySlugConflict(error)) {
+        const bySlug = await Facility.findBySlug(
+          facilityPayload.slug,
+          connection
+        );
+        const recovered = await reuseExistingFacility(bySlug, connection);
+        if (recovered) return recovered;
+      }
+
+      rethrowServiceError(error);
+    }
   } finally {
     await releaseFacilityCreateLock(connection, lockKey);
   }
