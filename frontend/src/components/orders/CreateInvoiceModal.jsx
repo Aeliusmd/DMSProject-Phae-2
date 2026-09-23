@@ -129,9 +129,7 @@ export default function CreateInvoiceModal({
           return;
         }
 
-        const derivedRushLevel = calculateOrderRushLevel(
-          orderData.subpoenaDate || orderData.createdAt
-        );
+        const derivedRushLevel = calculateOrderRushLevel(orderData.createdAt);
         setRushLevel(derivedRushLevel);
         setPendingFacilitySearchFee(
           !isEditMode

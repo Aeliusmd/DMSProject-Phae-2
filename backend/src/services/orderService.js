@@ -340,7 +340,7 @@ function resolveOrderWriteOffState(row, invoiceRow, xrayRow) {
     status,
     displayStatus: deriveDisplayOrderStatus(
       status,
-      row.subpoena_date || row.created_at
+      row.created_at
     ),
     filterStatus:
       isWriteOffs && status !== "Completed"
@@ -1047,7 +1047,7 @@ function mapOrderListRow(
   const doiDisplay = formatDoiDisplay(row);
   const dobSsn = [dob, ssn, doiDisplay].filter(Boolean);
 
-  const rush = calculateOrderRushLevel(row.subpoena_date || row.created_at);
+  const rush = calculateOrderRushLevel(row.created_at);
   const writeOffState = resolveOrderWriteOffState(row, invoiceRow, xrayRow);
 
   const mapped = {
@@ -1342,7 +1342,7 @@ function mapOrderDetail(
   );
   const mappedRecords = mapOrderRecords(orderRecords);
   const primaryUploaded = mappedRecords.find((record) => record.hasFile);
-  const rush = calculateOrderRushLevel(row.subpoena_date || row.created_at);
+  const rush = calculateOrderRushLevel(row.created_at);
   const writeOffState = resolveOrderWriteOffState(row, invoiceRow, xrayRow);
 
   const mapped = {

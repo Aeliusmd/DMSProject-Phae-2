@@ -1040,7 +1040,7 @@ function mapInvoiceDetail(row) {
     notes: row.notes || "",
     sendOrderDetails: Boolean(row.send_order_details),
     rushOrder: Boolean(row.is_rush_order),
-    rushLevel: calculateOrderRushLevel(row.subpoena_date || row.order_created_at).label,
+    rushLevel: calculateOrderRushLevel(row.order_created_at).label,
     subpoenaDate: toInputDate(row.subpoena_date),
     applicant: buildApplicantName(row),
   };
@@ -1832,7 +1832,7 @@ function mapOrderInvoiceSummary(
     notes: row.notes || "",
     sendOrderDetails: Boolean(row.send_order_details),
     rushOrder: Boolean(row.is_rush_order),
-    rushLevel: calculateOrderRushLevel(row.subpoena_date || row.order_created_at).label,
+    rushLevel: calculateOrderRushLevel(row.order_created_at).label,
     subpoenaDate: toInputDate(row.subpoena_date),
   };
 }
@@ -3950,9 +3950,7 @@ async function deliverInvoiceEmail(
       reminderLevel: isReminder ? reminderNumber : null,
       sendOrderDetails: Boolean(invoice.send_order_details),
       isRushOrder: Boolean(invoice.is_rush_order),
-      rushLevel: calculateOrderRushLevel(
-        invoice.subpoena_date || invoice.order_created_at
-      ).label,
+      rushLevel: calculateOrderRushLevel(invoice.order_created_at).label,
       orderDetailsText: Boolean(invoice.send_order_details)
         ? buildOrderDetailsText(invoice, payments)
         : "",

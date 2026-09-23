@@ -98,7 +98,7 @@ function resolveCombinedFinancials(row) {
 function mapReportOrderRow(row) {
   const totalAmount = toNumber(row.total_amount);
   const invoiced = Boolean(row.invoice_id && totalAmount > 0);
-  const rush = calculateOrderRushLevel(row.subpoena_date || row.created_at);
+  const rush = calculateOrderRushLevel(row.created_at);
 
   return {
     id: row.id,

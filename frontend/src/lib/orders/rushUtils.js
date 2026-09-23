@@ -1,5 +1,5 @@
 /**
- * Rush levels are based on Date of Subpoena (calendar days, local date).
+ * Rush levels are based on order created date (calendar days, local date).
  * Rush 1: 14 through 20 days
  * Rush 2: 21 through 27 days
  * Rush 3: 28 days or more
@@ -61,9 +61,9 @@ export function getOrderAgeInDays(orderOrDate) {
 }
 
 function rushLevelRangeLabel(rush) {
-  if (rush === "Rush 1") return "14–20 days since Date of Subpoena";
-  if (rush === "Rush 2") return "21–27 days since Date of Subpoena";
-  if (rush === "Rush 3") return "28+ days since Date of Subpoena";
+  if (rush === "Rush 1") return "14–20 days since order created date";
+  if (rush === "Rush 2") return "21–27 days since order created date";
+  if (rush === "Rush 3") return "28+ days since order created date";
   return "";
 }
 
@@ -88,8 +88,8 @@ export function buildRushBadgeTooltip(orderOrDate, rushLabel = null) {
   if (days != null) {
     parts.push(
       days === 1
-        ? "1 day since Date of Subpoena"
-        : `${days} days since Date of Subpoena`
+        ? "1 day since order created date"
+        : `${days} days since order created date`
     );
   }
 
@@ -117,13 +117,7 @@ export function getOrderAgeDate(order) {
     return order;
   }
 
-  return (
-    order.subpoenaDate ||
-    order.subpoena_date ||
-    order.createdAt ||
-    order.created_at ||
-    null
-  );
+  return order.createdAt || order.created_at || null;
 }
 
 export function formatRushLevel(value) {
