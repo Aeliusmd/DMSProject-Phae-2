@@ -82,9 +82,12 @@ function buildOrderFormData(payload = {}) {
 
   FILE_FIELDS.forEach((field) => {
     const file = payload[field];
-    if (isFileLike(file)) {
-      formData.append(field, file);
+    if (!isFileLike(file)) return;
+    // Extract already has the PDF; sending it again would write a unused copy.
+    if (field === "subpoenaFile" && `${payload.subpoenaExtractId || ""}`.trim()) {
+      return;
     }
+    formData.append(field, file);
   });
 
   return formData;

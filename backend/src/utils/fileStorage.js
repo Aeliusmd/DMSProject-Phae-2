@@ -149,6 +149,29 @@ function resolveOrderStorageAbsolutePath(storagePath) {
   return resolveAbsolutePath(normalized);
 }
 
+/**
+ * Remove a multer-written processed subpoena that the order did not keep.
+ * Only deletes files under processed-subpoena/ or legacy processed/.
+ */
+function deleteUnusedProcessedSubpoenaUpload(relativePath, keptRelativePath) {
+  const unused = String(relativePath || "").replace(/\\/g, "/");
+  const kept = String(keptRelativePath || "").replace(/\\/g, "/");
+  if (!unused || unused === kept) return;
+
+  const isProcessedUpload =
+    unused.startsWith("processed-subpoena/") || unused.startsWith("processed/");
+  if (!isProcessedUpload) return;
+
+  const absolutePath = resolveOrderStorageAbsolutePath(unused);
+  if (!absolutePath || !fs.existsSync(absolutePath)) return;
+
+  try {
+    fs.unlinkSync(absolutePath);
+  } catch {
+    // Non-fatal: order already points at the kept file.
+  }
+}
+
 module.exports = {
   getFileServerRoot,
   ensureFileServerReady,
@@ -161,4 +184,5 @@ module.exports = {
   isUploadsRelativePath,
   resolveOrderStorageAbsolutePath,
   archiveBatchScanSubpoenaToProcessed,
+  deleteUnusedProcessedSubpoenaUpload,
 };

@@ -2975,6 +2975,10 @@ async function createOrder(data, actorId, files, options = {}) {
           }
         }
         subpoenaStoragePath = sharedArchivedSubpoenaPath;
+        fileStorage.deleteUnusedProcessedSubpoenaUpload(
+          sharedSubpoenaPathFromUpload,
+          sharedArchivedSubpoenaPath
+        );
       } else {
         subpoenaStoragePath = sharedSubpoenaPathFromUpload;
       }
@@ -3536,6 +3540,10 @@ async function updateOrder(id, data, actorId, files) {
           linkedExtract.storage_path,
           orderNumber,
           actorId
+        );
+        fileStorage.deleteUnusedProcessedSubpoenaUpload(
+          toRelativeStoragePath(subpoenaFile),
+          subpoenaStoragePath
         );
       } catch (error) {
         throw new ApiError(404, error.message || "Subpoena PDF not found");
