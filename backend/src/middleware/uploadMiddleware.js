@@ -11,9 +11,20 @@ const {
 
 /**
  * Facility document uploads:
- * Stored inside facility-specific folder:
- * {FILE_SERVER}/uploads/facilities/<facilityId>/
+ * {FILE_SERVER}/uploads/facilities/<facilityId>/uploads/
+ * {FILE_SERVER}/uploads/facilities/<facilityId>/note-attachments/
+ * Legacy files stored directly under <facilityId>/ remain readable.
  */
+
+function facilitySubdir(req, folderName) {
+  const dir = path.join(
+    facilityUploadsDir,
+    String(req.params.id || "unknown"),
+    folderName
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 /**
  * Order document uploads (under FILE_SERVER/uploads):
@@ -99,13 +110,7 @@ function sanitizeFileName(originalName) {
  */
 const facilityStorage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const facilityDir = path.join(
-      facilityUploadsDir,
-      String(req.params.id || "unknown")
-    );
-
-    fs.mkdirSync(facilityDir, { recursive: true });
-    cb(null, facilityDir);
+    cb(null, facilitySubdir(req, "uploads"));
   },
 
   filename: (_req, file, cb) => {
@@ -133,14 +138,7 @@ const facilityDocumentUpload = multer({
 
 const facilityNoteAttachmentStorage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const facilityDir = path.join(
-      facilityUploadsDir,
-      String(req.params.id || "unknown"),
-      "note-attachments"
-    );
-
-    fs.mkdirSync(facilityDir, { recursive: true });
-    cb(null, facilityDir);
+    cb(null, facilitySubdir(req, "note-attachments"));
   },
 
   filename: (_req, file, cb) => {
