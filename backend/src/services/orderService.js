@@ -497,6 +497,26 @@ function resolveOrderSubpoenaAbsolutePath(storagePath) {
   return fileStorage.resolveAbsolutePath(normalized);
 }
 
+function nestOrderUploadPath(relativePath, actorId, orderId) {
+  return fileStorage.moveUploadToOrderFolder(relativePath, actorId, orderId);
+}
+
+async function nestAndPersistSubpoenaPath(
+  connection,
+  { orderId, storagePath, actorId }
+) {
+  const nestedPath = nestOrderUploadPath(storagePath, actorId, orderId);
+  if (nestedPath && nestedPath !== storagePath) {
+    await connection.execute(
+      `UPDATE orders
+       SET subpoena_storage_path = :subpoenaStoragePath
+       WHERE id = :orderId`,
+      { subpoenaStoragePath: nestedPath, orderId }
+    );
+  }
+  return nestedPath || storagePath;
+}
+
 function buildOrderDbPayload(data) {
   return {
     facilityId: Number(data.facility),
@@ -2156,13 +2176,19 @@ async function addOrderNote(orderId, data, actorId, file, options = {}) {
   );
   const timeZone = options.timezone || config.businessTimezone;
 
+  const attachmentPath = nestOrderUploadPath(
+    toRelativeStoragePath(file),
+    actorId,
+    order.id
+  );
+
   const noteId = await Order.createNote({
     orderId: order.id,
     createdBy: actorId || null,
     authorName,
     note: noteText,
     callbackDate: callbackAt,
-    attachmentPath: toRelativeStoragePath(file),
+    attachmentPath,
     isCalled: 0,
   });
 
@@ -2188,7 +2214,7 @@ async function addOrderNote(orderId, data, actorId, file, options = {}) {
     authorName,
     note: noteText,
     callbackDate: callbackAt,
-    attachmentPath: toRelativeStoragePath(file),
+    attachmentPath,
   });
 
   const notes = await Order.findNotesByOrderId(order.id, false);
@@ -2248,7 +2274,11 @@ async function updateOrderNote(orderId, noteId, data, actorId, file, options = {
   }
 
   const authorName = await resolveAuthorName(actorId);
-  const attachmentPath = toRelativeStoragePath(file);
+  const attachmentPath = nestOrderUploadPath(
+    toRelativeStoragePath(file),
+    actorId,
+    order.id
+  );
   const callbackAt = resolveCallbackAtUtc(data.callbackDate, timeZone);
 
   const pool = getPool();
@@ -2485,7 +2515,11 @@ async function saveOrderDocuments(
       documentName: trimOrNull(documentName) || additionalDocFile.originalname,
       originalFileName: additionalDocFile.originalname,
       mimeType: additionalDocFile.mimetype || null,
-      storagePath: toRelativeStoragePath(additionalDocFile),
+      storagePath: nestOrderUploadPath(
+        toRelativeStoragePath(additionalDocFile),
+        actorId,
+        orderId
+      ),
       fileSizeBytes: additionalDocFile.size || null,
       uploadedBy: actorId || null,
     });
@@ -3002,6 +3036,18 @@ async function createOrder(data, actorId, files, options = {}) {
         hasSubpoena: orderFlags.hasSubpoena,
         createdBy: actorId || null,
       });
+
+      if (subpoenaStoragePath) {
+        subpoenaStoragePath = await nestAndPersistSubpoenaPath(connection, {
+          orderId,
+          storagePath: subpoenaStoragePath,
+          actorId,
+        });
+        sharedArchivedSubpoenaPath = subpoenaStoragePath;
+        if (sharedSubpoenaPathFromUpload) {
+          sharedSubpoenaPathFromUpload = subpoenaStoragePath;
+        }
+      }
 
       await OrderRecord.syncForOrder(connection, orderId, singleTypes);
 
@@ -3539,7 +3585,8 @@ async function updateOrder(id, data, actorId, files) {
         subpoenaStoragePath = fileStorage.archiveBatchScanSubpoenaToProcessed(
           linkedExtract.storage_path,
           orderNumber,
-          actorId
+          actorId,
+          existing.id
         );
         fileStorage.deleteUnusedProcessedSubpoenaUpload(
           toRelativeStoragePath(subpoenaFile),
@@ -3549,7 +3596,11 @@ async function updateOrder(id, data, actorId, files) {
         throw new ApiError(404, error.message || "Subpoena PDF not found");
       }
     } else {
-      const newSubpoenaPath = toRelativeStoragePath(subpoenaFile);
+      const newSubpoenaPath = nestOrderUploadPath(
+        toRelativeStoragePath(subpoenaFile),
+        actorId,
+        existing.id
+      );
       subpoenaStoragePath =
         newSubpoenaPath || existing.subpoena_storage_path || null;
     }
@@ -3902,7 +3953,11 @@ async function scanMedicalRecords(
       await OrderRecord.insertScan(connection, {
         orderId,
         recordType: normalizedType,
-        storagePath: toRelativeStoragePath(file),
+        storagePath: nestOrderUploadPath(
+          toRelativeStoragePath(file),
+          actorId,
+          orderId
+        ),
         originalFileName: file.originalname || null,
         pageCount,
         uploadedBy: actorId || null,
