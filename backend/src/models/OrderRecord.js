@@ -5,23 +5,14 @@
  */
 
 const fs = require("fs");
-const path = require("path");
 const { getPool } = require("../config/database");
 const fileStorage = require("../utils/fileStorage");
-const { ORDER_UPLOADS_ROOT } = require("../middleware/uploadMiddleware");
 
 const RECORD_COLUMNS = `id, order_id, record_type, storage_path, original_file_name,
               page_count, uploaded_by, uploaded_at, created_at, updated_at`;
 
 function resolveStorageAbsolutePath(storagePath) {
-  const normalized = String(storagePath || "").replace(/\\/g, "/");
-  if (!normalized) return null;
-
-  if (fileStorage.isUploadsRelativePath(normalized)) {
-    return path.join(ORDER_UPLOADS_ROOT, normalized);
-  }
-
-  return fileStorage.resolveAbsolutePath(normalized);
+  return fileStorage.resolveStoredAbsolutePath(storagePath);
 }
 
 function deleteStoredFile(storagePath) {

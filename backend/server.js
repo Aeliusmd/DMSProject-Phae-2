@@ -6,6 +6,7 @@ const config = require("./src/config");
 const { connectDatabase } = require("./src/config/database");
 const { ensureUploadDirs, uploadsRoot } = require("./src/config/uploads");
 const { ensureFileServerReady } = require("./src/utils/fileStorage");
+const { ensureAppSettingsTable } = require("./src/services/appSettingsService");
 const logger = require("./src/utils/logger");
 const { startEmployeeReactivationJob } = require("./src/jobs/employeeReactivationJob");
 const { startInvoiceReminderJob } = require("./src/jobs/invoiceReminderJob");
@@ -15,6 +16,7 @@ const PORT = config.port;
 async function startServer() {
   try {
     await connectDatabase();
+    await ensureAppSettingsTable();
     ensureUploadDirs();
 
     if (config.fileServer) {

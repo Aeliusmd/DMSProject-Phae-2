@@ -4,6 +4,7 @@
 
 const { getPool } = require("../config/database");
 const Order = require("../models/Order");
+const fileStorage = require("../utils/fileStorage");
 const { ACTIVITY_FILTER_VALUES } = require("../lib/reportQueryParser");
 
 const PRODUCED_STATUSES = new Set(["Ready", "Ready to Pickup", "Completed"]);
@@ -130,9 +131,7 @@ function mapReportOrderRow(row) {
     createdAt: row.created_at || null,
     rushLevel: rush.label,
     rushLabel: rush.label,
-    subpoenaUrl: row.subpoena_storage_path
-      ? `/uploads/${row.subpoena_storage_path}`
-      : "",
+    subpoenaUrl: fileStorage.toPublicUploadsUrl(row.subpoena_storage_path),
   };
 }
 

@@ -1,6 +1,7 @@
 const OrderNoteTag = require("../models/OrderNoteTag");
 const Employee = require("../models/Employee");
 const ApiError = require("../utils/ApiError");
+const fileStorage = require("../utils/fileStorage");
 const config = require("../config");
 const {
   formatUtcInstantDisplay,
@@ -38,7 +39,7 @@ function mapTaggedInboxItem(row, timeZone = config.businessTimezone) {
     noteDateDisplay: noteDateIso
       ? formatUtcInstantDisplay(noteDateIso, timeZone)
       : "",
-    attachmentUrl: row.attachment_path ? `/uploads/${row.attachment_path}` : "",
+    attachmentUrl: fileStorage.toPublicUploadsUrl(row.attachment_path),
   };
 }
 

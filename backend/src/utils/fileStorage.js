@@ -3,13 +3,126 @@ const path = require("path");
 const config = require("../config");
 const ApiError = require("./ApiError");
 const { ORDER_UPLOAD_DIRS, ORDER_UPLOADS_ROOT } = require("../middleware/uploadMiddleware");
+const { getFileServerBasePath } = require("../services/appSettingsService");
 
 function getFileServerRoot() {
-  const root = config.fileServer;
+  const root = getFileServerBasePath() || config.fileServer;
   if (!root) {
     throw new ApiError(503, "File storage is not configured");
   }
   return path.resolve(root);
+}
+
+function normalizeToForward(inputPath) {
+  return String(inputPath || "").replace(/\\/g, "/").trim();
+}
+
+function isWindowsAbsolutePath(inputPath) {
+  return /^[a-zA-Z]:[\\/]/.test(String(inputPath || ""));
+}
+
+function toFileServerRelative(inputPath) {
+  return normalizeToForward(inputPath).replace(/^\/+/, "");
+}
+
+function formatStoredFilePath(relativePath) {
+  const cleaned = toFileServerRelative(relativePath);
+  if (!cleaned) return "";
+  return `\\${cleaned.replace(/\//g, "\\")}`;
+}
+
+/**
+ * Store paths without the file-server base, e.g.
+ * \uploads\facilities\109\note-attachments\file.pdf
+ */
+function toStoredFilePath(inputPath) {
+  if (!inputPath) return inputPath;
+
+  const raw = String(inputPath);
+  const normalized = normalizeToForward(raw);
+
+  if (isWindowsAbsolutePath(raw) || path.isAbsolute(raw)) {
+    const absolute = path.resolve(raw);
+    const base = getFileServerRoot();
+    let relative = path.relative(base, absolute).replace(/\\/g, "/");
+    if (!relative || relative.startsWith("..")) {
+      const uploadsRel = path
+        .relative(ORDER_UPLOADS_ROOT, absolute)
+        .replace(/\\/g, "/");
+      if (uploadsRel && !uploadsRel.startsWith("..")) {
+        relative = `uploads/${uploadsRel}`;
+      } else {
+        return raw;
+      }
+    }
+    return formatStoredFilePath(relative);
+  }
+
+  const relative = toFileServerRelative(normalized);
+  if (isUploadsRelativePath(relative)) {
+    return formatStoredFilePath(`uploads/${relative}`);
+  }
+  return formatStoredFilePath(relative);
+}
+
+/**
+ * Merge app_settings base path + stored relative path.
+ * Legacy absolute paths and uploads-relative paths stay readable.
+ */
+function resolveStoredAbsolutePath(storagePath) {
+  const raw = String(storagePath || "").trim();
+  if (!raw) return null;
+
+  if (isWindowsAbsolutePath(raw) || path.isAbsolute(raw)) {
+    if (fs.existsSync(raw)) return path.resolve(raw);
+    try {
+      const absolute = path.resolve(raw);
+      const base = getFileServerRoot();
+      const relative = path.relative(base, absolute).replace(/\\/g, "/");
+      if (relative && !relative.startsWith("..")) {
+        return path.join(base, ...relative.split("/"));
+      }
+    } catch {
+      // Keep the original stored absolute path.
+    }
+    return raw;
+  }
+
+  const relative = toFileServerRelative(raw);
+  if (!relative) return null;
+
+  if (relative.startsWith("uploads/")) {
+    return path.join(getFileServerRoot(), ...relative.split("/"));
+  }
+
+  if (isUploadsRelativePath(relative)) {
+    return path.join(ORDER_UPLOADS_ROOT, ...relative.split("/"));
+  }
+
+  return path.join(getFileServerRoot(), ...relative.split("/"));
+}
+
+function toPublicUploadsUrl(storagePath) {
+  if (!storagePath) return "";
+
+  const relative = toFileServerRelative(storagePath);
+  if (relative.startsWith("uploads/")) {
+    return `/${relative}`;
+  }
+  if (isUploadsRelativePath(relative)) {
+    return `/uploads/${relative}`;
+  }
+
+  if (isWindowsAbsolutePath(storagePath) || path.isAbsolute(storagePath)) {
+    const abs = resolveStoredAbsolutePath(storagePath);
+    if (!abs) return "";
+    const uploadsRel = path.relative(ORDER_UPLOADS_ROOT, abs).replace(/\\/g, "/");
+    if (uploadsRel && !uploadsRel.startsWith("..")) {
+      return `/uploads/${uploadsRel}`;
+    }
+  }
+
+  return "";
 }
 
 function ensureDir(dirPath) {
@@ -48,7 +161,7 @@ function saveBatchScanFile(userId, fileName, buffer) {
 
   return {
     absolutePath,
-    relativePath: `${relativeDir}/${safeName}`.replace(/\\/g, "/"),
+    relativePath: toStoredFilePath(`${relativeDir}/${safeName}`),
     fileName: safeName,
   };
 }
@@ -77,18 +190,19 @@ function saveCompanyPortalSubpoena(companyUserId, fileName, buffer) {
 
   return {
     absolutePath,
-    relativePath: `${relativeDir}/${safeName}`.replace(/\\/g, "/"),
+    relativePath: toStoredFilePath(`${relativeDir}/${safeName}`),
     fileName: safeName,
     originalName: path.basename(fileName),
   };
 }
 
 function resolveAbsolutePath(relativePath) {
-  return path.join(getFileServerRoot(), ...relativePath.split("/"));
+  return resolveStoredAbsolutePath(relativePath);
 }
 
 function isUploadsRelativePath(relativePath) {
-  const normalized = String(relativePath || "").replace(/\\/g, "/");
+  const normalized = toFileServerRelative(relativePath);
+  if (normalized.startsWith("uploads/")) return false;
   return (
     normalized.startsWith("processed-subpoena/") ||
     normalized.startsWith("processed/") ||
@@ -143,38 +257,41 @@ function staffOrderUploadDir(typeRoot, employeeId, orderNumber) {
 function moveUploadToOrderFolder(relativePath, employeeId, orderNumber) {
   if (!relativePath) return relativePath;
 
-  const normalized = String(relativePath).replace(/\\/g, "/");
   const orderFolder = resolveOrderNumberFolder(orderNumber);
-  if (!normalized || !orderFolder) return normalized;
+  if (!orderFolder) return toStoredFilePath(relativePath) || relativePath;
 
-  const parts = normalized.split("/").filter(Boolean);
+  const relative = toFileServerRelative(relativePath);
+  const scoped = relative.startsWith("uploads/")
+    ? relative.slice("uploads/".length)
+    : relative;
+  const parts = scoped.split("/").filter(Boolean);
   if (parts.length < 2 || !ORDER_SCOPED_UPLOAD_ROOTS.has(parts[0])) {
-    return normalized;
+    return toStoredFilePath(relativePath) || relativePath;
   }
 
   // type/userId/orderNumber/file — already nested (including shared split-order files)
   if (parts.length >= 4) {
-    return normalized;
+    return toStoredFilePath(relativePath) || relativePath;
   }
 
   const fileName = parts[parts.length - 1];
-  if (!fileName) return normalized;
+  if (!fileName) return toStoredFilePath(relativePath) || relativePath;
 
   const folderId = resolveStaffFolderId(employeeId);
   const destRelative = `${parts[0]}/${folderId}/${orderFolder}/${fileName}`;
-  const srcAbs = resolveOrderStorageAbsolutePath(normalized);
+  const srcAbs = resolveStoredAbsolutePath(relativePath);
   if (!srcAbs || !fs.existsSync(srcAbs)) {
-    return normalized;
+    return toStoredFilePath(relativePath) || relativePath;
   }
 
   const destAbs = path.join(ORDER_UPLOADS_ROOT, ...destRelative.split("/"));
   if (path.resolve(srcAbs) === path.resolve(destAbs)) {
-    return destRelative;
+    return toStoredFilePath(destRelative);
   }
 
   fs.mkdirSync(path.dirname(destAbs), { recursive: true });
   fs.renameSync(srcAbs, destAbs);
-  return destRelative;
+  return toStoredFilePath(destRelative);
 }
 
 /**
@@ -213,18 +330,11 @@ function archiveBatchScanSubpoenaToProcessed(
   const relative = orderFolder
     ? `processed-subpoena/${folderId}/${orderFolder}/${fileName}`
     : `processed-subpoena/${folderId}/${fileName}`;
-  return relative.replace(/\\/g, "/");
+  return toStoredFilePath(relative);
 }
 
 function resolveOrderStorageAbsolutePath(storagePath) {
-  const normalized = String(storagePath || "").replace(/\\/g, "/");
-  if (!normalized) return null;
-
-  if (isUploadsRelativePath(normalized)) {
-    return path.join(ORDER_UPLOADS_ROOT, normalized);
-  }
-
-  return resolveAbsolutePath(normalized);
+  return resolveStoredAbsolutePath(storagePath);
 }
 
 /**
@@ -232,12 +342,16 @@ function resolveOrderStorageAbsolutePath(storagePath) {
  * Only deletes files under processed-subpoena/ or legacy processed/.
  */
 function deleteUnusedProcessedSubpoenaUpload(relativePath, keptRelativePath) {
-  const unused = String(relativePath || "").replace(/\\/g, "/");
-  const kept = String(keptRelativePath || "").replace(/\\/g, "/");
+  const unused = toFileServerRelative(relativePath);
+  const kept = toFileServerRelative(keptRelativePath);
   if (!unused || unused === kept) return;
 
+  const unusedScoped = unused.startsWith("uploads/")
+    ? unused.slice("uploads/".length)
+    : unused;
   const isProcessedUpload =
-    unused.startsWith("processed-subpoena/") || unused.startsWith("processed/");
+    unusedScoped.startsWith("processed-subpoena/") ||
+    unusedScoped.startsWith("processed/");
   if (!isProcessedUpload) return;
 
   const absolutePath = resolveOrderStorageAbsolutePath(unused);
@@ -259,6 +373,9 @@ module.exports = {
   getCompanyPortalOrderDir,
   saveCompanyPortalSubpoena,
   resolveAbsolutePath,
+  resolveStoredAbsolutePath,
+  toStoredFilePath,
+  toPublicUploadsUrl,
   isUploadsRelativePath,
   resolveOrderStorageAbsolutePath,
   resolveOrderNumberFolder,

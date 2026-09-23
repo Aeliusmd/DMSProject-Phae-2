@@ -40,7 +40,7 @@ const {
 } = require("../lib/reportQueryParser");
 const { FIELD_LIMITS } = require("../utils/fieldLimits");
 const { sanitizeZip, sanitizeZipOrNull } = require("../utils/zipUtils");
-const { toRelativeStoragePath, ORDER_UPLOADS_ROOT } = require("../middleware/uploadMiddleware");
+const { toRelativeStoragePath } = require("../middleware/uploadMiddleware");
 const {
   sumRegularInvoicePageCount,
   sumXrayInvoicePageCount,
@@ -476,25 +476,11 @@ function buildInjuryDatePayload(data) {
 }
 
 function buildSubpoenaUrl(storagePath) {
-  const normalized = String(storagePath || "").replace(/\\/g, "/");
-  if (!normalized) return "";
-
-  if (fileStorage.isUploadsRelativePath(normalized)) {
-    return `/uploads/${normalized}`;
-  }
-
-  return "";
+  return fileStorage.toPublicUploadsUrl(storagePath);
 }
 
 function resolveOrderSubpoenaAbsolutePath(storagePath) {
-  const normalized = String(storagePath || "").replace(/\\/g, "/");
-  if (!normalized) return null;
-
-  if (fileStorage.isUploadsRelativePath(normalized)) {
-    return path.join(ORDER_UPLOADS_ROOT, normalized);
-  }
-
-  return fileStorage.resolveAbsolutePath(normalized);
+  return fileStorage.resolveStoredAbsolutePath(storagePath);
 }
 
 function nestOrderUploadPath(relativePath, actorId, orderNumber) {
@@ -1188,7 +1174,7 @@ function mapDocument(doc) {
     originalFileName: doc.original_file_name || "",
     mimeType: doc.mime_type || "",
     storagePath: doc.storage_path || "",
-    url: doc.storage_path ? `/uploads/${doc.storage_path}` : "",
+    url: fileStorage.toPublicUploadsUrl(doc.storage_path),
     fileSizeBytes: doc.file_size_bytes ?? null,
     uploadedAt: doc.uploaded_at || null,
   };
@@ -1224,9 +1210,7 @@ function mapActivityLog(log, timeZone = config.businessTimezone) {
       : "",
     note: expandCalledbackNoteText(log.note, timeZone, fallbackInstant),
     module: "Orders",
-    attachmentUrl: log.attachment_path
-      ? `/uploads/${log.attachment_path}`
-      : "",
+    attachmentUrl: fileStorage.toPublicUploadsUrl(log.attachment_path),
     activityDate: log.activity_date,
   };
 }
@@ -1251,9 +1235,7 @@ function mapNote(note, timeZone = config.businessTimezone) {
     callbackAt,
     isCalled: Boolean(note.is_called),
     attachmentPath: note.attachment_path || "",
-    attachmentUrl: note.attachment_path
-      ? `/uploads/${note.attachment_path}`
-      : "",
+    attachmentUrl: fileStorage.toPublicUploadsUrl(note.attachment_path),
   };
 }
 
@@ -1287,7 +1269,7 @@ function mapReminderRow(row, timeZone = config.businessTimezone) {
     isCalled: Boolean(row.is_called),
     status: Boolean(row.is_called) ? "callbacked" : "not_callbacked",
     attachmentPath: row.attachment_path || "",
-    attachmentUrl: row.attachment_path ? `/uploads/${row.attachment_path}` : "",
+    attachmentUrl: fileStorage.toPublicUploadsUrl(row.attachment_path),
   };
 }
 

@@ -232,7 +232,9 @@ const uploadMedicalRecordsScan = multer({
 
 function toRelativeStoragePath(file) {
   if (!file) return null;
-  return path.relative(ORDER_UPLOADS_ROOT, file.path).split(path.sep).join("/");
+  const rel = path.relative(ORDER_UPLOADS_ROOT, file.path).split(path.sep).join("/");
+  if (!rel || rel.startsWith("..")) return null;
+  return `\\uploads\\${rel.replace(/\//g, "\\")}`;
 }
 
 const PDF_MIME = "application/pdf";

@@ -67,7 +67,7 @@ exports.downloadDocument = asyncHandler(async (req, res) => {
     "Content-Disposition",
     `attachment; filename="${path.basename(document.document_name)}"`
   );
-  await sendFileResponse(res, document.storage_path);
+  await sendFileResponse(res, document.absolutePath || document.storage_path);
 });
 
 exports.previewDocument = asyncHandler(async (req, res) => {
@@ -85,7 +85,10 @@ exports.previewDocument = asyncHandler(async (req, res) => {
   );
 
   const fs = require("fs");
-  await pipeStreamToResponse(res, fs.createReadStream(document.storage_path));
+  await pipeStreamToResponse(
+    res,
+    fs.createReadStream(document.absolutePath || document.storage_path)
+  );
 });
 
 exports.deleteDocument = asyncHandler(async (req, res) => {

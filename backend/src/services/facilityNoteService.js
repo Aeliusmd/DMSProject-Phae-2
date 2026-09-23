@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const ApiError = require("../utils/ApiError");
+const fileStorage = require("../utils/fileStorage");
 const config = require("../config");
 const Facility = require("../models/Facility");
 const FacilityNote = require("../models/FacilityNote");
@@ -159,7 +160,7 @@ async function createNote(facilityId, { note }, actorId, files = [], options = {
     savedAttachments = await FacilityNoteAttachment.createMany(
       files.map((file) => ({
         facilityNoteId: created.id,
-        storagePath: file.path,
+        storagePath: fileStorage.toStoredFilePath(file.path),
         originalFilename: file.originalname || "attachment",
         mimeType: file.mimetype || "",
         fileSizeBytes: file.size || 0,
@@ -195,14 +196,15 @@ async function getAttachmentFile(facilityId, noteId, attachmentId) {
     throw new ApiError(404, "Attachment not found");
   }
 
-  if (!attachment.storage_path || !fs.existsSync(attachment.storage_path)) {
+  const absolutePath = fileStorage.resolveStoredAbsolutePath(attachment.storage_path);
+  if (!absolutePath || !fs.existsSync(absolutePath)) {
     throw new ApiError(
       404,
       "This attachment could not be opened. The file may have been moved or deleted."
     );
   }
 
-  return attachment;
+  return { ...attachment, absolutePath };
 }
 
 function resolveMimeType(fileName, mimeType) {

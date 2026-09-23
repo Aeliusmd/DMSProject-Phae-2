@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const ApiError = require("../utils/ApiError");
+const fileStorage = require("../utils/fileStorage");
 const config = require("../config");
 const Facility = require("../models/Facility");
 const FacilityDocument = require("../models/FacilityDocument");
@@ -76,7 +77,7 @@ async function createDocument(
     documentName: file.originalname,
     uploadType: normalizedType,
     fileType: FacilityDocument.getFileTypeFromName(file.originalname),
-    storagePath: file.path,
+    storagePath: fileStorage.toStoredFilePath(file.path),
     fileSizeBytes: file.size,
     uploadedBy,
   });
@@ -96,14 +97,15 @@ async function getDocumentFile(facilityId, documentId) {
     throw new ApiError(404, "Document not found");
   }
 
-  if (!document.storage_path || !fs.existsSync(document.storage_path)) {
+  const absolutePath = fileStorage.resolveStoredAbsolutePath(document.storage_path);
+  if (!absolutePath || !fs.existsSync(absolutePath)) {
     throw new ApiError(
       404,
       "This document could not be opened. The file may have been moved or deleted."
     );
   }
 
-  return document;
+  return { ...document, absolutePath };
 }
 
 async function deleteDocument(facilityId, documentId, deletedBy) {

@@ -101,8 +101,8 @@ function addLookupExpiry(fromDate = new Date()) {
 
 function toRelativeLicensePath(file) {
   if (!file?.path) return null;
-  const relative = path.relative(uploadsRoot, file.path).replace(/\\/g, "/");
-  return relative || null;
+  const fileStorage = require("../utils/fileStorage");
+  return fileStorage.toStoredFilePath(file.path);
 }
 
 function formatIsoToDisplay(iso) {

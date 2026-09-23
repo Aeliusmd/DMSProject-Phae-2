@@ -69,5 +69,5 @@ exports.downloadAttachment = asyncHandler(async (req, res) => {
     `attachment; filename="${path.basename(attachment.original_filename)}"`
   );
 
-  await sendFileResponse(res, attachment.storage_path);
+  await sendFileResponse(res, attachment.absolutePath || attachment.storage_path);
 });
