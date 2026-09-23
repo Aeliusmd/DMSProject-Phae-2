@@ -90,6 +90,7 @@ function resolveAbsolutePath(relativePath) {
 function isUploadsRelativePath(relativePath) {
   const normalized = String(relativePath || "").replace(/\\/g, "/");
   return (
+    normalized.startsWith("processed-subpoena/") ||
     normalized.startsWith("processed/") ||
     normalized.startsWith("unprocessed-subpoenas/") ||
     normalized.startsWith("additional-documents/") ||
@@ -100,30 +101,41 @@ function isUploadsRelativePath(relativePath) {
   );
 }
 
+function resolveStaffFolderId(employeeId) {
+  const id = Number(employeeId);
+  return Number.isFinite(id) && id > 0 ? String(id) : "system";
+}
+
 /**
  * Copy a batch-scan subpoena PDF from FILE_SERVER/Order/BatchScan/
- * into FILE_SERVER/uploads/processed/.
+ * into FILE_SERVER/uploads/processed-subpoena/{employeeId}/.
  * The source remains available if the surrounding database transaction fails
  * and the extract needs to be retried.
  * Returns the relative path stored on orders.subpoena_storage_path.
  */
-function archiveBatchScanSubpoenaToProcessed(batchScanRelativePath, orderNumber) {
+function archiveBatchScanSubpoenaToProcessed(
+  batchScanRelativePath,
+  orderNumber,
+  employeeId
+) {
   const sourceAbsolute = resolveAbsolutePath(batchScanRelativePath);
   if (!fs.existsSync(sourceAbsolute)) {
     throw new ApiError(404, `Subpoena file not found: ${batchScanRelativePath}`);
   }
 
-  fs.mkdirSync(ORDER_UPLOAD_DIRS.processed, { recursive: true });
+  const folderId = resolveStaffFolderId(employeeId);
+  const destDir = path.join(ORDER_UPLOAD_DIRS.processedSubpoena, folderId);
+  fs.mkdirSync(destDir, { recursive: true });
 
   const stem = path.basename(batchScanRelativePath, path.extname(batchScanRelativePath));
   const safeStem = stem.replace(/[^\w.\-]+/g, "_").slice(0, 80) || "subpoena";
   const safeOrder = String(orderNumber || "order").replace(/[^\w.\-]+/g, "_");
   const fileName = `${safeOrder}_${Date.now()}_${safeStem}.pdf`;
-  const destAbsolute = path.join(ORDER_UPLOAD_DIRS.processed, fileName);
+  const destAbsolute = path.join(destDir, fileName);
 
   fs.copyFileSync(sourceAbsolute, destAbsolute);
 
-  return `processed/${fileName}`.replace(/\\/g, "/");
+  return `processed-subpoena/${folderId}/${fileName}`.replace(/\\/g, "/");
 }
 
 function resolveOrderStorageAbsolutePath(storagePath) {

@@ -2967,7 +2967,8 @@ async function createOrder(data, actorId, files, options = {}) {
             sharedArchivedSubpoenaPath =
               fileStorage.archiveBatchScanSubpoenaToProcessed(
                 linkedExtract.storage_path,
-                orderNumber
+                orderNumber,
+                actorId
               );
           } catch (error) {
             throw new ApiError(404, error.message || "Subpoena PDF not found");
@@ -3533,7 +3534,8 @@ async function updateOrder(id, data, actorId, files) {
       try {
         subpoenaStoragePath = fileStorage.archiveBatchScanSubpoenaToProcessed(
           linkedExtract.storage_path,
-          orderNumber
+          orderNumber,
+          actorId
         );
       } catch (error) {
         throw new ApiError(404, error.message || "Subpoena PDF not found");

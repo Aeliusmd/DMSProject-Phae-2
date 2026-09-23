@@ -17,19 +17,19 @@ const {
 
 /**
  * Order document uploads (under FILE_SERVER/uploads):
- * unprocessed-subpoenas/
- * processed/
- * additional-documents/
- * notes_attachments/
- * medical-records/
+ * processed-subpoena/{employeeId}/
+ * additional-documents/{employeeId}/
+ * notes_attachments/{employeeId}/
+ * medical-records/{employeeId}/
  * personal-portal/licenses/
+ *
+ * Employee folders are created on first file write, not at user creation.
  */
 
 const ORDER_UPLOADS_ROOT = uploadsRoot;
 
 const ORDER_UPLOAD_DIRS = {
-  unprocessedSubpoenas: path.join(ORDER_UPLOADS_ROOT, "unprocessed-subpoenas"),
-  processed: path.join(ORDER_UPLOADS_ROOT, "processed"),
+  processedSubpoena: path.join(ORDER_UPLOADS_ROOT, "processed-subpoena"),
   additionalDocuments: path.join(ORDER_UPLOADS_ROOT, "additional-documents"),
   orderNotes: path.join(ORDER_UPLOADS_ROOT, "notes_attachments"),
   medicalRecords: path.join(ORDER_UPLOADS_ROOT, "medical-records"),
@@ -37,17 +37,25 @@ const ORDER_UPLOAD_DIRS = {
 };
 
 const FIELD_DESTINATIONS = {
-  subpoenaFile: ORDER_UPLOAD_DIRS.processed,
+  subpoenaFile: ORDER_UPLOAD_DIRS.processedSubpoena,
   additionalDocumentFile: ORDER_UPLOAD_DIRS.additionalDocuments,
   attachment: ORDER_UPLOAD_DIRS.orderNotes,
 };
 
+function resolveUploaderFolderId(req) {
+  const id = Number(req?.user?.id);
+  return Number.isFinite(id) && id > 0 ? String(id) : "system";
+}
+
+function staffUploadDir(typeRoot, req) {
+  const dir = path.join(typeRoot, resolveUploaderFolderId(req));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 function ensureOrderUploadDirs() {
   fs.mkdirSync(ORDER_UPLOADS_ROOT, { recursive: true });
-
-  Object.values(ORDER_UPLOAD_DIRS).forEach((dir) => {
-    fs.mkdirSync(dir, { recursive: true });
-  });
+  fs.mkdirSync(ORDER_UPLOAD_DIRS.personalPortalLicenses, { recursive: true });
 }
 
 ensureUploadDirs();
@@ -152,9 +160,10 @@ const facilityNoteAttachmentUpload = multer({
  * Order / subpoena / note attachment storage
  */
 const orderStorage = multer.diskStorage({
-  destination(_req, file, cb) {
-    const dir = FIELD_DESTINATIONS[file.fieldname] || ORDER_UPLOAD_DIRS.processed;
-    cb(null, dir);
+  destination(req, file, cb) {
+    const typeRoot =
+      FIELD_DESTINATIONS[file.fieldname] || ORDER_UPLOAD_DIRS.processedSubpoena;
+    cb(null, staffUploadDir(typeRoot, req));
   },
 
   filename(_req, file, cb) {
@@ -197,9 +206,8 @@ const uploadOrderFiles = orderUpload.fields([
 const uploadNoteAttachment = orderUpload.single("attachment");
 
 const medicalRecordsStorage = multer.diskStorage({
-  destination(_req, _file, cb) {
-    fs.mkdirSync(ORDER_UPLOAD_DIRS.medicalRecords, { recursive: true });
-    cb(null, ORDER_UPLOAD_DIRS.medicalRecords);
+  destination(req, _file, cb) {
+    cb(null, staffUploadDir(ORDER_UPLOAD_DIRS.medicalRecords, req));
   },
   filename(req, file, cb) {
     const orderId = req.params.id || "order";
@@ -288,6 +296,7 @@ module.exports = {
 
   ORDER_UPLOADS_ROOT,
   ORDER_UPLOAD_DIRS,
+  resolveUploaderFolderId,
   orderUpload,
   uploadOrderFiles,
   uploadNoteAttachment,

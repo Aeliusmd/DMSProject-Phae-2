@@ -7,12 +7,11 @@ const config = require("./index");
  * Falls back to backend/uploads only when FILE_SERVER is unset (local dev).
  *
  * Layout:
- *   {FILE_SERVER}/uploads/facilities/
- *   {FILE_SERVER}/uploads/processed/
- *   {FILE_SERVER}/uploads/unprocessed-subpoenas/
- *   {FILE_SERVER}/uploads/additional-documents/
- *   {FILE_SERVER}/uploads/notes_attachments/
- *   {FILE_SERVER}/uploads/medical-records/
+ *   {FILE_SERVER}/uploads/facilities/{facilityId}/
+ *   {FILE_SERVER}/uploads/processed-subpoena/{employeeId}/
+ *   {FILE_SERVER}/uploads/additional-documents/{employeeId}/
+ *   {FILE_SERVER}/uploads/notes_attachments/{employeeId}/
+ *   {FILE_SERVER}/uploads/medical-records/{employeeId}/
  *   {FILE_SERVER}/uploads/personal-portal/licenses/
  *
  * Batch-scan / company-portal intake stays at FILE_SERVER root:
