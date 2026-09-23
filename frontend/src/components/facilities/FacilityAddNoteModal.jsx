@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import useIsClient from "@/hooks/useIsClient";
 import {
@@ -41,6 +41,7 @@ export default function FacilityAddNoteModal({
   const [error, setError] = useState("");
   const [attachmentError, setAttachmentError] = useState("");
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
 
   const clientValidationErrors = useMemo(() => {
     const nextErrors = {};
@@ -257,14 +258,37 @@ export default function FacilityAddNoteModal({
                 </label>
 
                 <input
+                  ref={fileInputRef}
                   type="file"
                   multiple
                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,.txt"
                   onChange={handleAttachmentChange}
-                  className={`block h-[36px] w-full rounded-[6px] border bg-white text-[11px] text-[#64748B] file:mr-3 file:h-[34px] file:border-0 file:border-r file:border-[#E2E8F0] file:bg-[#F8FAFC] file:px-3 file:text-[11px] file:font-medium file:text-[#334155] ${
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+
+                <div
+                  className={`flex h-[36px] min-w-0 items-center gap-2 rounded-[6px] border bg-white px-1 ${
                     attachmentError ? "border-red-500" : "border-[#CBD5E1]"
                   }`}
-                />
+                >
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex h-[28px] shrink-0 items-center justify-center rounded-[4px] border border-[#E2E8F0] bg-[#F8FAFC] px-3 text-[11px] font-medium text-[#334155] hover:bg-[#F1F5F9]"
+                  >
+                    Choose Files
+                  </button>
+
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-[#64748B]">
+                    {attachments.length === 0
+                      ? "No file chosen"
+                      : attachments.length === 1
+                        ? attachments[0].name
+                        : `${attachments.length} files chosen`}
+                  </span>
+                </div>
 
                 <p className="mt-1 text-[10px] text-[#94A3B8]">
                   PDF, Word, image, or text files. Up to {MAX_FILES} files,{" "}
