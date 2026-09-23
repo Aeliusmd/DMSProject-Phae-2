@@ -25,6 +25,15 @@ function toFileServerRelative(inputPath) {
   return normalizeToForward(inputPath).replace(/^\/+/, "");
 }
 
+function isStoredRelativePath(inputPath) {
+  const relative = toFileServerRelative(inputPath);
+  return (
+    relative.startsWith("uploads/") ||
+    relative.startsWith("Order/") ||
+    isUploadsRelativePath(relative)
+  );
+}
+
 function formatStoredFilePath(relativePath) {
   const cleaned = toFileServerRelative(relativePath);
   if (!cleaned) return "";
@@ -41,7 +50,7 @@ function toStoredFilePath(inputPath) {
   const raw = String(inputPath);
   const normalized = normalizeToForward(raw);
 
-  if (isWindowsAbsolutePath(raw) || path.isAbsolute(raw)) {
+  if (!isStoredRelativePath(raw) && (isWindowsAbsolutePath(raw) || path.isAbsolute(raw))) {
     const absolute = path.resolve(raw);
     const base = getFileServerRoot();
     let relative = path.relative(base, absolute).replace(/\\/g, "/");
@@ -73,30 +82,32 @@ function resolveStoredAbsolutePath(storagePath) {
   const raw = String(storagePath || "").trim();
   if (!raw) return null;
 
-  if (isWindowsAbsolutePath(raw) || path.isAbsolute(raw)) {
-    if (fs.existsSync(raw)) return path.resolve(raw);
-    try {
-      const absolute = path.resolve(raw);
-      const base = getFileServerRoot();
-      const relative = path.relative(base, absolute).replace(/\\/g, "/");
-      if (relative && !relative.startsWith("..")) {
-        return path.join(base, ...relative.split("/"));
-      }
-    } catch {
-      // Keep the original stored absolute path.
-    }
-    return raw;
-  }
-
   const relative = toFileServerRelative(raw);
   if (!relative) return null;
 
-  if (relative.startsWith("uploads/")) {
+  // Stored form starts with \uploads\... — Windows treats that as absolute.
+  // Merge with the file-server base before any path.isAbsolute check.
+  if (relative.startsWith("uploads/") || relative.startsWith("Order/")) {
     return path.join(getFileServerRoot(), ...relative.split("/"));
   }
 
   if (isUploadsRelativePath(relative)) {
     return path.join(ORDER_UPLOADS_ROOT, ...relative.split("/"));
+  }
+
+  if (isWindowsAbsolutePath(raw)) {
+    if (fs.existsSync(raw)) return path.resolve(raw);
+    try {
+      const absolute = path.resolve(raw);
+      const base = getFileServerRoot();
+      const fromBase = path.relative(base, absolute).replace(/\\/g, "/");
+      if (fromBase && !fromBase.startsWith("..")) {
+        return path.join(base, ...fromBase.split("/"));
+      }
+    } catch {
+      // Keep the original stored absolute path.
+    }
+    return raw;
   }
 
   return path.join(getFileServerRoot(), ...relative.split("/"));
