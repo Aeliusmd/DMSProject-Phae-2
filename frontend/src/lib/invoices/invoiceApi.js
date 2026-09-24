@@ -1,4 +1,4 @@
-import { request } from "@/lib/auth/authApi";
+import { request, authFetch } from "@/lib/auth/authApi";
 
 const EMPTY_SUMMARY = {
   companies: 0,
@@ -76,6 +76,38 @@ export async function getResendInvoices(filters = {}) {
 export async function getInvoice(id) {
   const data = await request(`/invoices/${id}`, { auth: true });
   return data?.data?.invoice || null;
+}
+
+export async function acquireOrderInvoiceEditLock(orderId, kind) {
+  const data = await request(`/invoices/order/${orderId}/edit-lock`, {
+    method: "POST",
+    auth: true,
+    body: { kind },
+  });
+  return data?.data?.lock || null;
+}
+
+export async function heartbeatOrderInvoiceEditLock(orderId, kind) {
+  const data = await request(`/invoices/order/${orderId}/edit-lock/heartbeat`, {
+    method: "POST",
+    auth: true,
+    body: { kind },
+  });
+  return data?.data?.lock || null;
+}
+
+export async function releaseOrderInvoiceEditLock(orderId, kind) {
+  try {
+    await authFetch(
+      `/invoices/order/${orderId}/edit-lock?kind=${encodeURIComponent(kind)}`,
+      {
+        method: "DELETE",
+        keepalive: true,
+      }
+    );
+  } catch {
+    // Leaving the invoice editor should not fail if release cannot complete.
+  }
 }
 
 export async function createInvoice(payload) {

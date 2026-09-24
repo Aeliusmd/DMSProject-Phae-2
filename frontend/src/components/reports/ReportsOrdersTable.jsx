@@ -422,6 +422,7 @@ export default function ReportsOrdersTable({
       <CreateInvoiceModal
         isOpen={Boolean(selectedInvoiceOrder)}
         order={selectedInvoiceOrder}
+        returnToPath="/reports"
         onClose={() => setSelectedInvoiceOrder(null)}
       />
     </>

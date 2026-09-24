@@ -1688,6 +1688,15 @@ export default function OrdersTable({
     });
   };
 
+  const listBackHref =
+    listReturnTo === "reports"
+      ? "/reports"
+      : listReturnTo === "personal-orders" || personalMode
+        ? "/personal-orders"
+        : listReturnTo === "company-orders" || companyPortalMode
+          ? "/company-orders"
+          : "/orders";
+
   return (
     <>
       <section
@@ -2760,6 +2769,7 @@ export default function OrdersTable({
         isOpen={Boolean(selectedInvoiceOrder)}
         mode={invoiceModalMode}
         order={selectedInvoiceOrder}
+        returnToPath={listBackHref}
         onClose={() => setSelectedInvoiceOrder(null)}
         onSaved={fetchOrders}
       />
@@ -2767,6 +2777,7 @@ export default function OrdersTable({
       <CreateXrayInvoiceModal
         isOpen={Boolean(selectedXrayOrder)}
         order={selectedXrayOrder}
+        returnToPath={listBackHref}
         onClose={() => setSelectedXrayOrder(null)}
         onSaved={fetchOrders}
       />
@@ -2852,15 +2863,7 @@ export default function OrdersTable({
       <OrderNotesListModal
         isOpen={Boolean(selectedNoteListOrder)}
         order={selectedNoteListOrder}
-        returnToPath={
-          listReturnTo === "reports"
-            ? "/reports"
-            : listReturnTo === "personal-orders" || personalMode
-              ? "/personal-orders"
-              : listReturnTo === "company-orders" || companyPortalMode
-                ? "/company-orders"
-                : "/orders"
-        }
+        returnToPath={listBackHref}
         onClose={() => setSelectedNoteListOrder(null)}
         onSaved={() => fetchOrders({ silent: true, force: true })}
       />

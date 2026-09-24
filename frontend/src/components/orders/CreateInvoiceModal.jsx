@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname, useRouter } from "next/navigation";
 import useIsClient from "@/hooks/useIsClient";
+import AlertModal from "@/components/ui/AlertModal";
+import {
+  ORDER_INVOICE_EDIT_LOCK_MESSAGE,
+  useOrderInvoiceEditLock,
+} from "@/lib/invoices/useOrderInvoiceEditLock";
 import {
   createInvoice,
   getInvoice,
@@ -56,9 +62,13 @@ export default function CreateInvoiceModal({
   onClose,
   onSaved,
   mode = "create",
+  returnToPath = "",
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const mounted = useIsClient();
   const isEditMode = mode === "edit";
+  const listBackHref = returnToPath || pathname || "/orders";
 
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
@@ -77,6 +87,13 @@ export default function CreateInvoiceModal({
   const [pendingFacilitySearchFee, setPendingFacilitySearchFee] = useState(0);
   const [isEditing, setIsEditing] = useState(!isEditMode);
   const [invoiceReloadKey, setInvoiceReloadKey] = useState(0);
+  const [invoiceLockBlocked, setInvoiceLockBlocked] = useState(false);
+
+  const lockOrderId = isOpen && order?.dbId ? order.dbId : null;
+  const { status: lockStatus, error: lockError } = useOrderInvoiceEditLock(
+    lockOrderId,
+    "regular"
+  );
 
   const openSession =
     isOpen && order ? `${order.id || order.orderNo}-${isEditMode}` : null;
@@ -101,11 +118,19 @@ export default function CreateInvoiceModal({
       );
       setSavedDetailedFees(null);
       setIsEditing(!isEditMode);
+      setInvoiceLockBlocked(false);
     }
   }
 
   useEffect(() => {
+    if (lockStatus === "blocked") {
+      setInvoiceLockBlocked(true);
+    }
+  }, [lockStatus]);
+
+  useEffect(() => {
     if (!isOpen) return;
+    if (lockStatus !== "held") return;
 
     if (!order?.dbId) {
       setLoadError("Order not found");
@@ -204,7 +229,7 @@ export default function CreateInvoiceModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, order?.dbId, isEditMode, order?.invoiceId, order?.invoice?.invoiceId, invoiceReloadKey]);
+  }, [isOpen, order?.dbId, isEditMode, order?.invoiceId, order?.invoice?.invoiceId, invoiceReloadKey, lockStatus]);
 
   useEffect(() => {
     if (!openSession) {
@@ -600,6 +625,7 @@ export default function CreateInvoiceModal({
     setSubmitError("");
 
     if (Object.keys(validationErrors).length > 0) return;
+    if (lockStatus !== "held") return;
 
     const feePayload = mapDueFormToInvoiceFees(formData);
 
@@ -639,6 +665,11 @@ export default function CreateInvoiceModal({
         setInvoiceReloadKey((prev) => prev + 1);
       }
     } catch (error) {
+      if (Number(error?.status) === 409) {
+        setInvoiceLockBlocked(true);
+        return;
+      }
+
       const { fieldErrors, errorMessage } = resolveInvoiceSubmitError(error);
 
       if (Object.keys(fieldErrors).length > 0) {
@@ -656,9 +687,18 @@ export default function CreateInvoiceModal({
     }
   };
 
+  const handleLockDismiss = () => {
+    onClose?.();
+    router.push(listBackHref);
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-end justify-center overflow-y-auto bg-black/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4 sm:py-6">
-      <section className="flex h-[100dvh] max-h-[100dvh] w-full max-w-[880px] min-h-0 flex-col overflow-hidden rounded-t-[12px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-42px)] sm:rounded-[10px]">
+      <section
+        className={`flex h-[100dvh] max-h-[100dvh] w-full max-w-[880px] min-h-0 flex-col overflow-hidden rounded-t-[12px] bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-42px)] sm:rounded-[10px] ${
+          invoiceLockBlocked ? "pointer-events-none select-none blur-[4px]" : ""
+        }`}
+      >
         <div className="relative shrink-0 bg-gradient-to-r from-[#008AA3] via-[#0A96AA] to-[#56AFC0] px-4 py-4 text-white sm:px-5">
           <button
             type="button"
@@ -683,10 +723,10 @@ export default function CreateInvoiceModal({
           </p>
         </div>
 
-        {!isContentReady ? (
+        {!isContentReady || lockStatus === "checking" ? (
           <InvoiceModalLoadingBody message="Loading invoice..." />
-        ) : loadError ? (
-          <InvoiceModalErrorBody message={loadError} />
+        ) : lockStatus === "error" || loadError ? (
+          <InvoiceModalErrorBody message={loadError || lockError} />
         ) : (
           <>
         <div className="shrink-0 border-b border-[#E2E8F0] bg-white px-4 py-3 sm:px-5">
@@ -1108,6 +1148,14 @@ export default function CreateInvoiceModal({
           </>
         )}
       </section>
+      <AlertModal
+        open={invoiceLockBlocked}
+        variant="error"
+        title="Invoice is being edited"
+        message={ORDER_INVOICE_EDIT_LOCK_MESSAGE}
+        confirmLabel="OK"
+        onClose={handleLockDismiss}
+      />
     </div>,
     document.body
   );

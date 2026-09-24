@@ -2,6 +2,8 @@ const asyncHandler = require("../utils/asyncHandler");
 const ApiResponse = require("../utils/ApiResponse");
 const ApiError = require("../utils/ApiError");
 const invoiceService = require("../services/invoiceService");
+const orderInvoiceEditLockService = require("../services/orderInvoiceEditLockService");
+const Invoice = require("../models/Invoice");
 const {
   validateCreateInvoice,
   validateUpdateInvoice,
@@ -97,8 +99,42 @@ exports.getById = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, { invoice }, "Invoice retrieved");
 });
 
+exports.acquireInvoiceEditLock = asyncHandler(async (req, res) => {
+  const lock = await orderInvoiceEditLockService.acquireOrderInvoiceEditLock(
+    req.params.orderId,
+    req.body?.kind,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Invoice edit lock acquired");
+});
+
+exports.heartbeatInvoiceEditLock = asyncHandler(async (req, res) => {
+  const lock = await orderInvoiceEditLockService.heartbeatOrderInvoiceEditLock(
+    req.params.orderId,
+    req.body?.kind,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Invoice edit lock refreshed");
+});
+
+exports.releaseInvoiceEditLock = asyncHandler(async (req, res) => {
+  const result = await orderInvoiceEditLockService.releaseOrderInvoiceEditLock(
+    req.params.orderId,
+    req.query?.kind || req.body?.kind,
+    req.user.id
+  );
+  return ApiResponse.success(res, result, "Invoice edit lock released");
+});
+
 exports.create = asyncHandler(async (req, res) => {
   const orderId = Number(req.body?.orderId);
+  if (Number.isFinite(orderId) && orderId > 0) {
+    await orderInvoiceEditLockService.assertNotLockedByOther(
+      orderId,
+      "regular",
+      req.user.id
+    );
+  }
   let allowZeroTotal = false;
 
   if (Number.isFinite(orderId)) {
@@ -137,6 +173,16 @@ exports.create = asyncHandler(async (req, res) => {
 });
 
 exports.update = asyncHandler(async (req, res) => {
+  const existing = await Invoice.findById(req.params.id);
+  if (!existing) {
+    throw new ApiError(404, "Invoice not found");
+  }
+  await orderInvoiceEditLockService.assertNotLockedByOther(
+    existing.order_id,
+    "regular",
+    req.user.id
+  );
+
   throwIfInvalid(validateUpdateInvoice(req.body));
 
   const invoice = await invoiceService.updateInvoice(req.params.id, req.body);
@@ -291,10 +337,18 @@ exports.emailXrayByOrder = asyncHandler(async (req, res) => {
 });
 
 exports.createXray = asyncHandler(async (req, res) => {
+  const orderId = Number(req.body?.orderId);
+  if (Number.isFinite(orderId) && orderId > 0) {
+    await orderInvoiceEditLockService.assertNotLockedByOther(
+      orderId,
+      "xray",
+      req.user.id
+    );
+  }
+
   throwIfInvalid(validateXrayInvoice(req.body));
 
   const xray = await invoiceService.createOrUpdateXrayInvoice(req.body, req.user?.id);
-  const orderId = Number(req.body.orderId);
   const context = await resolveOrderBillingContext(orderId);
   const payment = formatCurrency(xray.xray?.payment || 0);
 

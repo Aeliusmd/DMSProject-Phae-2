@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname, useRouter } from "next/navigation";
 import useIsClient from "@/hooks/useIsClient";
+import AlertModal from "@/components/ui/AlertModal";
+import {
+  ORDER_INVOICE_EDIT_LOCK_MESSAGE,
+  useOrderInvoiceEditLock,
+} from "@/lib/invoices/useOrderInvoiceEditLock";
 import { getTodayInputDate } from "@/lib/utils/dateUtils";
 import {
   getXrayInvoiceByOrderId,
@@ -32,8 +38,12 @@ export default function CreateXrayInvoiceModal({
   order,
   onClose,
   onSaved,
+  returnToPath = "",
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const mounted = useIsClient();
+  const listBackHref = returnToPath || pathname || "/orders";
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -42,6 +52,13 @@ export default function CreateXrayInvoiceModal({
   const [hasExistingInvoice, setHasExistingInvoice] = useState(false);
   const [isEditing, setIsEditing] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
+  const [invoiceLockBlocked, setInvoiceLockBlocked] = useState(false);
+
+  const lockOrderId = isOpen && order?.dbId ? order.dbId : null;
+  const { status: lockStatus, error: lockError } = useOrderInvoiceEditLock(
+    lockOrderId,
+    "xray"
+  );
 
   const openSession =
     isOpen && order ? String(order.id || order.orderNo) : null;
@@ -58,11 +75,19 @@ export default function CreateXrayInvoiceModal({
       setSubmitError("");
       setHasExistingInvoice(likelyExisting);
       setIsEditing(!likelyExisting);
+      setInvoiceLockBlocked(false);
     }
   }
 
   useEffect(() => {
+    if (lockStatus === "blocked") {
+      setInvoiceLockBlocked(true);
+    }
+  }, [lockStatus]);
+
+  useEffect(() => {
     if (!isOpen || !order?.dbId) return;
+    if (lockStatus !== "held") return;
 
     let cancelled = false;
 
@@ -115,7 +140,7 @@ export default function CreateXrayInvoiceModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, order?.dbId, reloadKey]);
+  }, [isOpen, order?.dbId, reloadKey, lockStatus]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -222,6 +247,7 @@ export default function CreateXrayInvoiceModal({
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) return;
+    if (lockStatus !== "held") return;
 
     setSubmitting(true);
     setSubmitError("");
@@ -251,6 +277,11 @@ export default function CreateXrayInvoiceModal({
 
       onClose();
     } catch (error) {
+      if (Number(error?.status) === 409) {
+        setInvoiceLockBlocked(true);
+        return;
+      }
+
       const { fieldErrors, message } = applyApiFieldErrors(error);
 
       if (Object.keys(fieldErrors).length > 0) {
@@ -265,9 +296,18 @@ export default function CreateXrayInvoiceModal({
     }
   };
 
+  const handleLockDismiss = () => {
+    onClose?.();
+    router.push(listBackHref);
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4 sm:py-6">
-      <section className="flex max-h-[100dvh] w-full max-w-[720px] flex-col overflow-hidden rounded-t-[12px] bg-white shadow-2xl sm:max-h-[calc(100vh-42px)] sm:rounded-[10px]">
+      <section
+        className={`flex max-h-[100dvh] w-full max-w-[720px] flex-col overflow-hidden rounded-t-[12px] bg-white shadow-2xl sm:max-h-[calc(100vh-42px)] sm:rounded-[10px] ${
+          invoiceLockBlocked ? "pointer-events-none select-none blur-[4px]" : ""
+        }`}
+      >
         <div className="relative shrink-0 bg-gradient-to-r from-[#008AA3] via-[#0A96AA] to-[#56AFC0] px-4 py-4 text-white sm:px-5">
           <button
             type="button"
@@ -309,7 +349,11 @@ export default function CreateXrayInvoiceModal({
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_200px]">
-          {!isContentReady ? (
+          {lockStatus === "error" ? (
+            <p className="px-5 py-10 text-center text-[12px] font-medium text-red-500">
+              {lockError || "Failed to start invoice editing"}
+            </p>
+          ) : !isContentReady || lockStatus === "checking" ? (
             <InvoiceModalLoadingBody message="Loading X-Ray invoice..." />
           ) : (
             <>
@@ -504,6 +548,14 @@ export default function CreateXrayInvoiceModal({
           )}
         </div>
       </section>
+      <AlertModal
+        open={invoiceLockBlocked}
+        variant="error"
+        title="Invoice is being edited"
+        message={ORDER_INVOICE_EDIT_LOCK_MESSAGE}
+        confirmLabel="OK"
+        onClose={handleLockDismiss}
+      />
     </div>,
     document.body
   );
