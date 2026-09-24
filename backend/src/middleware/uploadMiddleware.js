@@ -11,19 +11,37 @@ const {
 
 /**
  * Facility document uploads:
- * {FILE_SERVER}/uploads/facilities/<facilityId>/uploads/
- * {FILE_SERVER}/uploads/facilities/<facilityId>/note-attachments/
- * Legacy files stored directly under <facilityId>/ remain readable.
+ * {FILE_SERVER}/uploads/facilities/<facilityId>/uploads/<userId>/
+ * {FILE_SERVER}/uploads/facilities/<facilityId>/note-attachments/<userId>/
+ * Legacy files under <facilityId>/ or <facilityId>/<type>/ (no user folder)
+ * remain readable via the stored DB path.
  */
+
+function resolveUploaderFolderId(req) {
+  const id = Number(req?.user?.id);
+  return Number.isFinite(id) && id > 0 ? String(id) : "system";
+}
+
+function resolveFacilityFolderId(req) {
+  const raw = String(req?.params?.id || "unknown");
+  const safe = raw.replace(/[^\w-]/g, "");
+  return safe || "unknown";
+}
 
 function facilitySubdir(req, folderName) {
   const dir = path.join(
     facilityUploadsDir,
-    String(req.params.id || "unknown"),
-    folderName
+    resolveFacilityFolderId(req),
+    folderName,
+    resolveUploaderFolderId(req)
   );
   fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function buildFacilityDiskFileName(req, file) {
+  const extension = path.extname(file.originalname || "").toLowerCase();
+  return `${randomUUID()}_${Date.now()}_${resolveFacilityFolderId(req)}${extension}`;
 }
 
 /**
@@ -54,11 +72,6 @@ const FIELD_DESTINATIONS = {
   additionalDocumentFile: ORDER_UPLOAD_DIRS.additionalDocuments,
   attachment: ORDER_UPLOAD_DIRS.orderNotes,
 };
-
-function resolveUploaderFolderId(req) {
-  const id = Number(req?.user?.id);
-  return Number.isFinite(id) && id > 0 ? String(id) : "system";
-}
 
 function staffUploadDir(typeRoot, req) {
   const dir = path.join(typeRoot, resolveUploaderFolderId(req));
@@ -113,9 +126,8 @@ const facilityStorage = multer.diskStorage({
     cb(null, facilitySubdir(req, "uploads"));
   },
 
-  filename: (_req, file, cb) => {
-    const extension = path.extname(file.originalname || "").toLowerCase();
-    cb(null, `${randomUUID()}${extension}`);
+  filename: (req, file, cb) => {
+    cb(null, buildFacilityDiskFileName(req, file));
   },
 });
 
@@ -141,9 +153,8 @@ const facilityNoteAttachmentStorage = multer.diskStorage({
     cb(null, facilitySubdir(req, "note-attachments"));
   },
 
-  filename: (_req, file, cb) => {
-    const extension = path.extname(file.originalname || "").toLowerCase();
-    cb(null, `${randomUUID()}${extension}`);
+  filename: (req, file, cb) => {
+    cb(null, buildFacilityDiskFileName(req, file));
   },
 });
 

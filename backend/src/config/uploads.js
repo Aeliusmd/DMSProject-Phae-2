@@ -7,15 +7,16 @@ const config = require("./index");
  * Falls back to backend/uploads only when FILE_SERVER is unset (local dev).
  *
  * Layout:
- *   {FILE_SERVER}/uploads/facilities/{facilityId}/uploads/
- *   {FILE_SERVER}/uploads/facilities/{facilityId}/note-attachments/
+ *   {FILE_SERVER}/uploads/facilities/{facilityId}/uploads/{userId}/
+ *   {FILE_SERVER}/uploads/facilities/{facilityId}/note-attachments/{userId}/
  *   {FILE_SERVER}/uploads/processed-subpoena/{employeeId}/{orderNumber}/
  *   {FILE_SERVER}/uploads/additional-documents/{employeeId}/{orderNumber}/
  *   {FILE_SERVER}/uploads/notes_attachments/{employeeId}/{orderNumber}/
  *   {FILE_SERVER}/uploads/medical-records/{employeeId}/{orderNumber}/
  *   {FILE_SERVER}/uploads/personal-portal/licenses/
  *
- * Legacy files under facilities/{facilityId}/ (no uploads/ subfolder)
+ * Legacy files under facilities/{facilityId}/ (no uploads/ subfolder),
+ * facilities/{facilityId}/uploads/ or note-attachments/ (no user folder),
  * and under {employeeId}/ (no order folder) remain readable.
  *
  * Batch-scan / company-portal intake stays at FILE_SERVER root:
