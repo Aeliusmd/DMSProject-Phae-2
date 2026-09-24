@@ -476,6 +476,9 @@ function NewOrderPageContent() {
     open: false,
     removing: false,
   });
+  const [subpoenaViewing, setSubpoenaViewing] = useState(false);
+  const [subpoenaViewError, setSubpoenaViewError] = useState("");
+  const [subpoenaActionMessage, setSubpoenaActionMessage] = useState("");
   const extractionMetaRef = useRef(extractionMeta);
   const doctorCreatedRef = useRef(false);
 
@@ -2392,6 +2395,8 @@ function NewOrderPageContent() {
     if (fieldName === "subpoenaFile" && file && !error) {
       setEditSubpoenaSrc("");
       setEditSubpoenaError("");
+      setSubpoenaViewError("");
+      setSubpoenaActionMessage("");
       setMatchedFacilities([]);
     setClickedMatchFacilityId("");
       setExtractionMeta({
@@ -2468,6 +2473,8 @@ function NewOrderPageContent() {
       setExtractError("");
       setEditSubpoenaSrc("");
       setEditSubpoenaError("");
+      setSubpoenaViewError("");
+      setSubpoenaActionMessage("");
       setMatchedFacilities([]);
     setClickedMatchFacilityId("");
     }
@@ -2488,6 +2495,7 @@ function NewOrderPageContent() {
     }));
     setEditSubpoenaSrc(order.subpoenaUrl ? toFileUrl(order.subpoenaUrl) : "");
     setEditSubpoenaError("");
+    setSubpoenaViewError("");
   };
 
   const clearSubpoenaExtractedFormFields = () => {
@@ -2521,6 +2529,7 @@ function NewOrderPageContent() {
     setExtractError("");
     setEditSubpoenaSrc("");
     setEditSubpoenaError("");
+    setSubpoenaViewError("");
     setMatchedFacilities([]);
     setClickedMatchFacilityId("");
     clearCommittedFacility();
@@ -2533,7 +2542,36 @@ function NewOrderPageContent() {
 
   const requestRemoveSubpoena = () => {
     if (isOrderReadOnly) return;
+    setSubpoenaActionMessage("");
     setSubpoenaRemoveModal({ open: true, removing: false });
+  };
+
+  const handleViewExistingSubpoena = async () => {
+    if (!isEditMode || !orderId) return;
+
+    setSubpoenaViewing(true);
+    setSubpoenaViewError("");
+    setSubpoenaActionMessage("");
+
+    try {
+      const blob = await fetchOrderSubpoenaPdf(orderId);
+      const objectUrl = URL.createObjectURL(blob);
+      const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
+
+      if (!opened) {
+        setSubpoenaViewError(
+          "Subpoena PDF is ready, but the browser blocked the new tab. Allow pop-ups to view it."
+        );
+      } else {
+        setSubpoenaActionMessage("Subpoena PDF opened.");
+      }
+
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (err) {
+      setSubpoenaViewError(getDocumentOpenErrorMessage(err, "subpoena PDF"));
+    } finally {
+      setSubpoenaViewing(false);
+    }
   };
 
   const handleRemoveExistingDocument = async (documentId) => {
@@ -2559,6 +2597,8 @@ function NewOrderPageContent() {
   const confirmRemoveSubpoena = async () => {
     setSubpoenaRemoveModal((prev) => ({ ...prev, removing: true }));
     setSaveError("");
+    setSubpoenaActionMessage("");
+    setSubpoenaViewError("");
 
     try {
       if (isEditMode && orderId && !formDataRef.current.subpoenaFile) {
@@ -2573,6 +2613,7 @@ function NewOrderPageContent() {
       }
       setExpandedPanels((prev) => ({ ...prev, subpoena: false }));
       setSubpoenaRemoveModal({ open: false, removing: false });
+      setSubpoenaActionMessage("Subpoena removed.");
     } catch (err) {
       setSubpoenaRemoveModal((prev) => ({ ...prev, removing: false }));
       setSaveError(getApiErrorMessage(err, "Failed to remove subpoena"));
@@ -2888,6 +2929,23 @@ function NewOrderPageContent() {
                 onRemoveExistingSubpoena={
                   isOrderReadOnly ? undefined : requestRemoveSubpoena
                 }
+                onViewExistingSubpoena={
+                  isEditMode ? handleViewExistingSubpoena : undefined
+                }
+                subpoenaViewing={subpoenaViewing}
+                subpoenaViewError={subpoenaViewError || editSubpoenaError}
+                subpoenaActionMessage={
+                  subpoenaViewError || editSubpoenaError
+                    ? ""
+                    : subpoenaActionMessage ||
+                      (isEditMode &&
+                      !formData.subpoenaFile &&
+                      formData.subpoenaUrl &&
+                      editSubpoenaSrc &&
+                      !editSubpoenaLoading
+                        ? "Subpoena PDF is available to view."
+                        : "")
+                }
                 submitAttempted={submitAttempted}
                 extractingSubpoena={extractingSubpoena}
                 extractError={extractError}
@@ -3057,6 +3115,10 @@ function OrderDetailsForm({
   onRemoveFile,
   onRemoveExistingDocument,
   onRemoveExistingSubpoena,
+  onViewExistingSubpoena,
+  subpoenaViewing = false,
+  subpoenaViewError = "",
+  subpoenaActionMessage = "",
   submitAttempted,
   extractingSubpoena = false,
   extractError = "",
@@ -3530,16 +3592,31 @@ function OrderDetailsForm({
         </p>
       )}
 
+      {subpoenaActionMessage ? (
+        <p className="text-[12px] font-medium text-[#059669]">
+          {subpoenaActionMessage}
+        </p>
+      ) : null}
+
       {!formData.subpoenaFile && formData.subpoenaUrl && (
         <ExistingFileLink
           label="Current subpoena"
           name={displaySubpoenaName(formData)}
           href={toFileUrl(formData.subpoenaUrl)}
+          onView={onViewExistingSubpoena}
+          viewing={subpoenaViewing}
+          viewError={subpoenaViewError}
           onRemove={
             readOnly ? undefined : () => onRemoveExistingSubpoena?.()
           }
         />
       )}
+
+      {!formData.subpoenaFile && !formData.subpoenaUrl && subpoenaViewError ? (
+        <p className="text-[12px] font-medium text-red-500">
+          {subpoenaViewError}
+        </p>
+      ) : null}
 
       <div>
         <h3 className="mb-3 text-[13px] font-semibold text-[#111827]">
@@ -4233,36 +4310,58 @@ function SelectedFileCard({ label, fileName, onRemove }) {
   );
 }
 
-function ExistingFileLink({ label, name, href, onRemove }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2">
-      <a
-        href={href || "#"}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="min-w-0 flex-1 hover:opacity-90"
-      >
-        <span className="block truncate text-[12px] font-semibold text-[#111827]">
-          {label}
-        </span>
-        {name && (
-          <span className="block truncate text-[11px] text-[#64748B]">
-            {name}
-          </span>
-        )}
-        <span className="mt-0.5 block text-[11px] font-semibold text-[#0097B2]">
-          View
-        </span>
-      </a>
+function ExistingFileLink({
+  label,
+  name,
+  href,
+  onView,
+  onRemove,
+  viewing = false,
+  viewError = "",
+}) {
+  const handleViewClick = (event) => {
+    if (!onView) return;
+    event.preventDefault();
+    if (!viewing) {
+      onView();
+    }
+  };
 
-      {onRemove ? (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="shrink-0 rounded-[6px] border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-100"
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 rounded-[6px] border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2">
+        <a
+          href={href || "#"}
+          target={onView ? undefined : "_blank"}
+          rel="noopener noreferrer"
+          onClick={handleViewClick}
+          className="min-w-0 flex-1 hover:opacity-90"
         >
-          Remove
-        </button>
+          <span className="block truncate text-[12px] font-semibold text-[#111827]">
+            {label}
+          </span>
+          {name && (
+            <span className="block truncate text-[11px] text-[#64748B]">
+              {name}
+            </span>
+          )}
+          <span className="mt-0.5 block text-[11px] font-semibold text-[#0097B2]">
+            {viewing ? "Opening..." : "View"}
+          </span>
+        </a>
+
+        {onRemove ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="shrink-0 rounded-[6px] border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-100"
+          >
+            Remove
+          </button>
+        ) : null}
+      </div>
+      {viewError ? (
+        <p className="mt-1 text-[11px] font-medium text-red-500">{viewError}</p>
       ) : null}
     </div>
   );
