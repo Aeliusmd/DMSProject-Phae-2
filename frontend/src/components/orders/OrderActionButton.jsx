@@ -17,7 +17,7 @@ export default function OrderActionButton({
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link href={href} className={className} onClick={onClick}>
         {icon}
         {children}
       </Link>

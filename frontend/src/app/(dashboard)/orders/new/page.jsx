@@ -46,6 +46,7 @@ import { getFacilities } from "@/lib/facilities/facilityApi";
 import { findSimilarFacilities } from "@/lib/orders/facilitySimilarity";
 import {
   clearDraftOrderSession,
+  consumeFreshNewOrderNavigation,
   getDraftOrderScope,
   hasDraftableOrderContent,
   isRestorableDraftOrderSession,
@@ -396,6 +397,36 @@ function NewOrderPageContent() {
     });
   }, []);
 
+  const resetBlankNewOrderForm = useCallback(() => {
+    formDataRef.current = initialFormData;
+    setFormDataAndRef(initialFormData);
+    setTouched({});
+    setSubmitAttempted(false);
+    setFileErrors({});
+    setExtractError("");
+    setExtractionMeta({
+      facilityName: "",
+      facilityCreated: false,
+      facilityReactivated: false,
+      extractedDoctorName: "",
+      providerName: "",
+      providerCreated: false,
+    });
+    setFacilityProfileIncomplete(false);
+    setFacilityCreated(false);
+    setFacilityReactivated(false);
+    setMissingDefaultDoctor(false);
+    setDoctorCreated(false);
+    setEditSubpoenaSrc("");
+    setEditSubpoenaError("");
+    setMatchedFacilities([]);
+    setClickedMatchFacilityId("");
+    clearCommittedFacility();
+    clearDraftOrderSession("new");
+    draftRestoredRef.current = false;
+    restoredDraftScopeRef.current = "";
+  }, [setFormDataAndRef]);
+
   const markCommittedFacility = (id, name) => {
     committedFacilityRef.current = {
       id: `${id || ""}`.trim(),
@@ -456,7 +487,13 @@ function NewOrderPageContent() {
     doctorCreatedRef.current = doctorCreated;
   }, [doctorCreated]);
 
-  const persistOrderDraft = useCallback(() => {
+  const persistOrderDraft = useCallback((options = {}) => {
+    // Blank New Order must not keep a leftover edit/create draft.
+    // Only persist that scope when leaving to create/edit a facility or doctor.
+    if (draftScope === "new" && options.force !== true) {
+      return;
+    }
+
     const current = formDataRef.current;
     const existing = readDraftOrderSession(draftScope, { allowIncomplete: true });
 
@@ -484,6 +521,10 @@ function NewOrderPageContent() {
       },
     });
   }, [draftScope]);
+
+  const persistFacilityDraft = useCallback(() => {
+    persistOrderDraft({ force: true });
+  }, [persistOrderDraft]);
 
   useEffect(() => {
     if (!hasDraftableOrderContent(formData)) {
@@ -700,7 +741,7 @@ function NewOrderPageContent() {
         Boolean(applyDoctorId);
 
       // Soft-nav from edit/subpoena → blank New Order keeps React state.
-      // Drop the prior restore flag so the form resets instead of leaking.
+      // Opening New Order from the list/nav must start empty, not a prior edit.
       if (
         scopeChanged &&
         draftScope === "new" &&
@@ -711,10 +752,13 @@ function NewOrderPageContent() {
         restoredDraftScopeRef.current = "";
       }
 
-      if (!subpoenaId && !draftRestoredRef.current) {
+      const forceFreshNewOrder = consumeFreshNewOrderNavigation();
+
+      if (!subpoenaId) {
         // Only restore an in-progress draft when returning from facility/doctor
         // create/edit. Opening New Order from the nav must start fresh.
         if (
+          !forceFreshNewOrder &&
           returningFromFacilityOrDoctor &&
           isRestorableDraftOrderSession(readDraftOrderSession(draftScope))
         ) {
@@ -730,29 +774,8 @@ function NewOrderPageContent() {
           };
         }
 
-        if (!returningFromFacilityOrDoctor) {
-          setFormData(initialFormData);
-          setTouched({});
-          setSubmitAttempted(false);
-          setFileErrors({});
-          setExtractError("");
-          setExtractionMeta({
-            facilityName: "",
-            facilityCreated: false,
-            facilityReactivated: false,
-            extractedDoctorName: "",
-            providerName: "",
-            providerCreated: false,
-          });
-          setFacilityProfileIncomplete(false);
-          setFacilityCreated(false);
-          setFacilityReactivated(false);
-          setMissingDefaultDoctor(false);
-          setDoctorCreated(false);
-          setEditSubpoenaSrc("");
-          setEditSubpoenaError("");
-          clearCommittedFacility();
-          clearDraftOrderSession(draftScope);
+        if (!returningFromFacilityOrDoctor || forceFreshNewOrder) {
+          resetBlankNewOrderForm();
         }
       }
       if (!isEditMode && !subpoenaId && facilityRefresh !== "1") {
@@ -1089,6 +1112,7 @@ function NewOrderPageContent() {
     draftScope,
     clearFacilityRefreshParam,
     restoreOrderDraftAfterFacilityReturn,
+    resetBlankNewOrderForm,
     setFormDataAndRef,
   ]);
 
@@ -2880,7 +2904,7 @@ function NewOrderPageContent() {
                 clickedMatchFacilityId={clickedMatchFacilityId}
                 onMatchedFacilitySelect={handleMatchedFacilitySelect}
                 returnToOrderPath={returnToOrderPath}
-                onBeforeFacilityProfileNavigate={persistOrderDraft}
+                onBeforeFacilityProfileNavigate={persistFacilityDraft}
                 readOnly={isOrderReadOnly}
                 allowCreateFacility={formData.creationSource !== "personal_portal"}
                 orderEndedNoFacility={
@@ -2916,7 +2940,7 @@ function NewOrderPageContent() {
                 doctorCreated={doctorCreated}
                 resolvingDoctor={resolvingDoctor}
                 returnToOrderPath={returnToOrderPath}
-                onBeforeFacilityProfileNavigate={persistOrderDraft}
+                onBeforeFacilityProfileNavigate={persistFacilityDraft}
                 onUseDefaultDoctor={handleUseDefaultDoctor}
                 readOnly={isOrderReadOnly}
                 isPersonalPortal={formData.creationSource === "personal_portal"}

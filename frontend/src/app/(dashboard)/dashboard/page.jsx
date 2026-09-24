@@ -10,6 +10,7 @@ import DashboardTopProviders from "@/components/dashboard/DashboardTopProviders"
 import { getStoredUser } from "@/lib/auth/authStorage";
 import { canAccessNavItem, isAdmin } from "@/lib/auth/roles";
 import { isUnprocessedSubpoenasNavHidden } from "@/lib/portalNavigationVisibility";
+import { markFreshNewOrderNavigation } from "@/lib/orders/facilityOrderUtils";
 
 const quickActions = [
   {
@@ -133,6 +134,7 @@ function QuickActionButton({ label, href, icon, primary = false }) {
   return (
     <Link
       href={href}
+      onClick={href === "/orders/new" ? markFreshNewOrderNavigation : undefined}
       className={`inline-flex h-[38px] items-center justify-center gap-2 rounded-[6px] px-4 text-[12px] font-semibold shadow-sm transition ${
         primary
           ? "bg-[#0097B2] text-white hover:bg-[#0086A0]"

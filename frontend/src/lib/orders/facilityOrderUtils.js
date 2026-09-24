@@ -11,6 +11,27 @@ const DRAFT_FORM_OMIT_KEYS = new Set([
 ]);
 
 const DRAFT_STORAGE_PREFIX = "dms:order-draft-session:";
+const FRESH_NEW_ORDER_KEY = "dms:order-fresh-new";
+
+export function markFreshNewOrderNavigation() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(FRESH_NEW_ORDER_KEY, "1");
+  } catch {
+    // Ignore storage failures in private browsing.
+  }
+}
+
+export function consumeFreshNewOrderNavigation() {
+  if (typeof window === "undefined") return false;
+  try {
+    const flagged = window.sessionStorage.getItem(FRESH_NEW_ORDER_KEY) === "1";
+    window.sessionStorage.removeItem(FRESH_NEW_ORDER_KEY);
+    return flagged;
+  } catch {
+    return false;
+  }
+}
 
 function draftOwnerKey() {
   const user = getStoredUser();

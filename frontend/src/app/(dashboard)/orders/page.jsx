@@ -20,6 +20,7 @@ import {
   writeOrderListFilters,
 } from "@/lib/orders/orderListFilterStorage";
 import { STAFF_PORTAL_ORDERS_HIDDEN } from "@/lib/portalNavigationVisibility";
+import { markFreshNewOrderNavigation } from "@/lib/orders/facilityOrderUtils";
 
 const BATCH_SCAN_FLASH_KEY = "dms.batchScanFlash";
 const BATCH_SCAN_FLASH_MS = 10000;
@@ -129,6 +130,7 @@ export default function OrdersPage() {
               href="/orders/new"
               variant="primary"
               icon={<PlusIcon />}
+              onClick={markFreshNewOrderNavigation}
             >
               New Order
             </OrderActionButton>
