@@ -72,6 +72,8 @@ export default function FacilityDetailsPage() {
   const facilityId = String(
     params?.facilityId || params?.FacilityId || params?.id || ""
   );
+  const { status: lockStatus, error: lockError } =
+    useFacilityEditLock(facilityId);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
