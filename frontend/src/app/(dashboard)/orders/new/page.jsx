@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import DashboardShell from "@/components/layout/DashboardShell";
+import AlertModal from "@/components/ui/AlertModal";
 import CollapsibleOrderPanel from "@/components/orders/new-order/CollapsibleOrderPanel";
 import NewOrderField, {
   CheckboxOption,
@@ -41,6 +42,10 @@ import {
 } from "@/components/icons/NewOrderIcons";
 
 import { createOrder, getOrder, updateOrder, getUnprocessedSubpoenaById, fetchUnprocessedSubpoenaPdf, fetchOrderSubpoenaPdf, uploadSingleSubpoena, deleteOrderAdditionalDocument, removeOrderSubpoena } from "@/lib/orders/orderApi";
+import {
+  ORDER_EDIT_LOCK_MESSAGE,
+  useOrderEditLock,
+} from "@/lib/orders/useOrderEditLock";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { getFacilities } from "@/lib/facilities/facilityApi";
 import { findSimilarFacilities } from "@/lib/orders/facilitySimilarity";
@@ -304,6 +309,9 @@ function NewOrderPageContent() {
   const returnToParam = searchParams.get("returnTo");
 
   const isEditMode = Boolean(orderId);
+  const { status: lockStatus, error: lockError } = useOrderEditLock(
+    isEditMode ? orderId : ""
+  );
 
   const resolveListPath = useCallback(
     (creationSource = "") => {
@@ -727,6 +735,10 @@ function NewOrderPageContent() {
     const scopeChanged = prevDraftScopeRef.current !== draftScope;
     prevDraftScopeRef.current = draftScope;
 
+    if (isEditMode && lockStatus !== "held") {
+      return undefined;
+    }
+
     if (
       isEditMode &&
       restoredDraftScopeRef.current === draftScope &&
@@ -1108,6 +1120,7 @@ function NewOrderPageContent() {
   }, [
     isEditMode,
     orderId,
+    lockStatus,
     subpoenaId,
     facilityRefresh,
     applyFacilityId,
@@ -2776,7 +2789,35 @@ function NewOrderPageContent() {
     }
   };
 
-  if (isEditMode && loadingOrder) {
+  if (isEditMode && lockStatus === "blocked") {
+    return (
+      <DashboardShell lockScroll>
+        <div className="pointer-events-none flex min-h-0 flex-1 select-none flex-col gap-4 overflow-hidden p-1 blur-[4px]">
+          <OrderListBackButton label={listBackLabel} onClick={() => {}} />
+          <div className="min-h-[420px] rounded-[10px] border border-[#E2E8F0] bg-white px-5 py-5">
+            <div className="h-5 w-48 rounded bg-[#E2E8F0]" />
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="h-10 rounded bg-[#F1F5F9]" />
+              <div className="h-10 rounded bg-[#F1F5F9]" />
+              <div className="h-10 rounded bg-[#F1F5F9]" />
+            </div>
+            <div className="mt-4 h-10 rounded bg-[#F1F5F9]" />
+            <div className="mt-4 h-10 rounded bg-[#F1F5F9]" />
+          </div>
+        </div>
+        <AlertModal
+          open
+          variant="error"
+          title="Order is being edited"
+          message={ORDER_EDIT_LOCK_MESSAGE}
+          confirmLabel="OK"
+          onClose={() => router.push(listBackHref)}
+        />
+      </DashboardShell>
+    );
+  }
+
+  if (isEditMode && (lockStatus === "checking" || loadingOrder)) {
     return (
       <DashboardShell lockScroll>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-1">
@@ -2789,11 +2830,11 @@ function NewOrderPageContent() {
     );
   }
 
-  if (isEditMode && loadError) {
+  if (isEditMode && (lockStatus === "error" || loadError)) {
     return (
       <DashboardShell lockScroll>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
-          <p className="text-[13px] font-semibold text-red-500">{loadError}</p>
+          <p className="text-[13px] font-semibold text-red-500">{lockError || loadError}</p>
           <OrderListBackButton label={listBackLabel} onClick={handleListBack} />
         </div>
       </DashboardShell>

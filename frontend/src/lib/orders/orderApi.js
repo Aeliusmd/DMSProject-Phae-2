@@ -156,6 +156,33 @@ export async function getOrder(id) {
   return data?.data?.order || null;
 }
 
+export async function acquireOrderEditLock(orderId) {
+  const data = await request(`/orders/${orderId}/edit-lock`, {
+    method: "POST",
+    auth: true,
+  });
+  return data?.data?.lock || null;
+}
+
+export async function heartbeatOrderEditLock(orderId) {
+  const data = await request(`/orders/${orderId}/edit-lock/heartbeat`, {
+    method: "POST",
+    auth: true,
+  });
+  return data?.data?.lock || null;
+}
+
+export async function releaseOrderEditLock(orderId) {
+  try {
+    await authFetch(`/orders/${orderId}/edit-lock`, {
+      method: "DELETE",
+      keepalive: true,
+    });
+  } catch {
+    // Leaving the page should not fail if release cannot complete.
+  }
+}
+
 export async function createOrder(payload) {
   const data = await request("/orders", {
     method: "POST",

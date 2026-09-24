@@ -47,6 +47,9 @@ router.delete(
   orderController.deleteAdditionalDocument
 );
 router.delete("/:id/subpoena", orderController.removeSubpoena);
+router.post("/:id/edit-lock", orderController.acquireEditLock);
+router.post("/:id/edit-lock/heartbeat", orderController.heartbeatEditLock);
+router.delete("/:id/edit-lock", orderController.releaseEditLock);
 router.get("/:id", orderController.getById);
 router.post("/", uploadOrderFiles, orderController.create);
 router.put("/:id", uploadOrderFiles, orderController.update);

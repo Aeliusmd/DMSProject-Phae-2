@@ -7,6 +7,7 @@ const {
   sendBufferResponse,
 } = require("../utils/responseUtils");
 const orderService = require("../services/orderService");
+const orderEditLockService = require("../services/orderEditLockService");
 const batchScanService = require("../services/batchScanService");
 const activityLogService = require("../services/activityLogService");
 const notificationService = require("../services/notificationService");
@@ -414,7 +415,32 @@ exports.create = asyncHandler(async (req, res) => {
   );
 });
 
+exports.acquireEditLock = asyncHandler(async (req, res) => {
+  const lock = await orderEditLockService.acquireOrderEditLock(
+    req.params.id,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Order edit lock acquired");
+});
+
+exports.heartbeatEditLock = asyncHandler(async (req, res) => {
+  const lock = await orderEditLockService.heartbeatOrderEditLock(
+    req.params.id,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Order edit lock refreshed");
+});
+
+exports.releaseEditLock = asyncHandler(async (req, res) => {
+  const result = await orderEditLockService.releaseOrderEditLock(
+    req.params.id,
+    req.user.id
+  );
+  return ApiResponse.success(res, result, "Order edit lock released");
+});
+
 exports.update = asyncHandler(async (req, res) => {
+  await orderEditLockService.assertNotLockedByOther(req.params.id, req.user.id);
   const existing = await orderService.getOrderById(req.params.id);
   if (!existing) {
     throw new ApiError(404, "Order not found");
@@ -477,6 +503,7 @@ exports.update = asyncHandler(async (req, res) => {
 });
 
 exports.updateFacility = asyncHandler(async (req, res) => {
+  await orderEditLockService.assertNotLockedByOther(req.params.id, req.user.id);
   const validation = validateOrderFacilityUpdate(req.body);
 
   if (!validation.valid) {
