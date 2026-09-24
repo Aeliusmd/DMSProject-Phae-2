@@ -37,8 +37,18 @@ function nextExpiry() {
 }
 
 function isActiveLock(row) {
-  if (!row?.expires_at) return false;
-  return new Date(row.expires_at).getTime() > Date.now();
+  if (!row) return false;
+  if (row.is_active !== undefined && row.is_active !== null) {
+    const flag = Buffer.isBuffer(row.is_active) ? row.is_active[0] : row.is_active;
+    return Number(flag) === 1 || flag === true || flag === "1";
+  }
+  if (!row.expires_at) return false;
+  const raw = row.expires_at;
+  const expiresAt =
+    raw instanceof Date
+      ? raw.getTime()
+      : Date.parse(`${String(raw).trim().replace(" ", "T")}Z`);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
 }
 
 function isHeldBy(row, employeeId) {
@@ -84,6 +94,11 @@ async function acquireOrderNoteEditLock(orderId, noteId, employeeId) {
       expiresAt: nextExpiry(),
     });
 
+    const held = await OrderNoteEditLock.findByNoteId(connection, noteKey);
+    if (held && isActiveLock(held) && !isHeldBy(held, actorId)) {
+      throw new ApiError(409, LOCKED_MESSAGE);
+    }
+
     await connection.commit();
     return { orderId: id, noteId: noteKey, employeeId: actorId };
   } catch (error) {
@@ -116,6 +131,11 @@ async function heartbeatOrderNoteEditLock(orderId, noteId, employeeId) {
       employeeId: actorId,
       expiresAt: nextExpiry(),
     });
+
+    const held = await OrderNoteEditLock.findByNoteId(connection, noteKey);
+    if (held && isActiveLock(held) && !isHeldBy(held, actorId)) {
+      throw new ApiError(409, LOCKED_MESSAGE);
+    }
 
     await connection.commit();
     return { orderId: id, noteId: noteKey, employeeId: actorId };

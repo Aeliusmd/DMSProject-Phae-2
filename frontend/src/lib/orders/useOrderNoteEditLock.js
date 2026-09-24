@@ -32,13 +32,19 @@ export function useOrderNoteEditLock(orderId, noteId) {
       try {
         await acquireOrderNoteEditLock(orderId, noteId);
         if (cancelled) {
-          await releaseOrderNoteEditLock(orderId, noteId);
+          // Do not release here. React remounts this effect immediately and
+          // releasing creates a gap where another user can take the same note.
           return;
         }
         heldRef.current = true;
         setStatus("held");
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled) {
+          if (Number(err?.status) === 409) {
+            setStatus("blocked");
+          }
+          return;
+        }
         if (Number(err?.status) === 409) {
           setStatus("blocked");
           return;

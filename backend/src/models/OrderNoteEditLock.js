@@ -4,7 +4,8 @@ class OrderNoteEditLock {
   static async findByNoteId(connection, noteId) {
     const db = connection || getPool();
     const [rows] = await db.execute(
-      `SELECT note_id, order_id, employee_id, locked_at, expires_at
+      `SELECT note_id, order_id, employee_id, locked_at, expires_at,
+              (expires_at > UTC_TIMESTAMP()) AS is_active
        FROM order_note_edit_locks
        WHERE note_id = :noteId
        LIMIT 1
@@ -22,10 +23,10 @@ class OrderNoteEditLock {
        VALUES
          (:noteId, :orderId, :employeeId, UTC_TIMESTAMP(), :expiresAt)
        ON DUPLICATE KEY UPDATE
-         order_id = :orderId,
-         employee_id = :employeeId,
-         locked_at = UTC_TIMESTAMP(),
-         expires_at = :expiresAt`,
+         order_id = IF(expires_at <= UTC_TIMESTAMP() OR employee_id = :employeeId, :orderId, order_id),
+         employee_id = IF(expires_at <= UTC_TIMESTAMP() OR employee_id = :employeeId, :employeeId, employee_id),
+         locked_at = IF(expires_at <= UTC_TIMESTAMP() OR employee_id = :employeeId, UTC_TIMESTAMP(), locked_at),
+         expires_at = IF(expires_at <= UTC_TIMESTAMP() OR employee_id = :employeeId, :expiresAt, expires_at)`,
       { noteId, orderId, employeeId, expiresAt }
     );
   }

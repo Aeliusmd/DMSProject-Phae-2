@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import useIsClient from "@/hooks/useIsClient";
-import { getOrderNotesPaginated, updateOrderNote } from "@/lib/orders/orderApi";
+import {
+  acquireOrderNoteEditLock,
+  getOrderNotesPaginated,
+  updateOrderNote,
+} from "@/lib/orders/orderApi";
 import {
   ORDER_NOTE_EDIT_LOCK_MESSAGE,
   useOrderNoteEditLock,
@@ -67,6 +71,7 @@ export default function OrderNotesListModal({
   const [dateFilters, setDateFilters] = useState(EMPTY_DATE_FILTERS);
   const [appliedDateFilters, setAppliedDateFilters] = useState(EMPTY_DATE_FILTERS);
   const [noteLockBlocked, setNoteLockBlocked] = useState(false);
+  const [lockingNoteId, setLockingNoteId] = useState(null);
 
   const orderId = order?.dbId ?? order?.id ?? null;
   const expandedNote = notes.find(
@@ -135,12 +140,18 @@ export default function OrderNotesListModal({
   );
 
   useEffect(() => {
+    if (!isOpen || !orderId) return;
+    resetExpandedForm();
+    setNoteLockBlocked(false);
+    setLockingNoteId(null);
+    setDateFilters(EMPTY_DATE_FILTERS);
+    setAppliedDateFilters(EMPTY_DATE_FILTERS);
+  }, [isOpen, orderId]);
+
+  useEffect(() => {
     if (!isOpen || !orderId) return undefined;
 
     let active = true;
-    resetExpandedForm();
-    setDateFilters(EMPTY_DATE_FILTERS);
-    setAppliedDateFilters(EMPTY_DATE_FILTERS);
     setLoadError("");
     setLoading(true);
 
@@ -224,17 +235,37 @@ export default function OrderNotesListModal({
     clearError("attachment");
   };
 
-  const handleSelectNote = (item) => {
-    if (expandedNoteId === item.id) {
+  const handleSelectNote = async (item) => {
+    if (Number(expandedNoteId) === Number(item.id)) {
       resetExpandedForm();
       return;
     }
 
-    applyExpandedNote(item);
+    if (item.isCalled) {
+      applyExpandedNote(item);
+      return;
+    }
+
+    if (!orderId || lockingNoteId) return;
+
+    setLockingNoteId(item.id);
+    setLoadError("");
+    try {
+      await acquireOrderNoteEditLock(orderId, item.id);
+      applyExpandedNote(item);
+    } catch (err) {
+      if (Number(err?.status) === 409) {
+        setNoteLockBlocked(true);
+        return;
+      }
+      setLoadError(err?.message || "Failed to start note editing");
+    } finally {
+      setLockingNoteId(null);
+    }
   };
 
   const handleCall = () => {
-    if (!expandedNoteId || isReadOnly || saving) return;
+    if (!expandedNoteId || isReadOnly || saving || !canEditNote) return;
 
     const callLine = buildCallbackLine();
     const nextText = noteText.trim()
@@ -276,7 +307,7 @@ export default function OrderNotesListModal({
   };
 
   const handleSave = async () => {
-    if (!expandedNoteId || isReadOnly) return;
+    if (!expandedNoteId || isReadOnly || !canEditNote) return;
 
     const nextErrors = validateNoteForm({
       noteText,
@@ -466,9 +497,10 @@ export default function OrderNotesListModal({
                     <button
                       type="button"
                       onClick={() => handleSelectNote(item)}
+                      disabled={Boolean(lockingNoteId)}
                       className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition ${
                         isExpanded ? "bg-[#F0FBFD]" : "bg-white hover:bg-[#F8FAFC]"
-                      }`}
+                      } disabled:cursor-wait disabled:opacity-70`}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
