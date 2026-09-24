@@ -490,23 +490,47 @@ function nestOrderUploadPath(relativePath, actorId, orderNumber) {
   return fileStorage.moveUploadToOrderFolder(relativePath, actorId, orderNumber);
 }
 
+function isGeneratedStorageFileName(name) {
+  const base = path.basename(String(name || "").trim());
+  if (!base) return true;
+  if (/^[a-f0-9]{32}_\d+\.[a-z0-9]+$/i.test(base)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(base)) {
+    return true;
+  }
+  if (/^\d+_\d{10,}_\d+_/.test(base)) return true;
+  if (/^\d{10,}-\d+-/.test(base)) return true;
+  return false;
+}
+
+function pickReadableOriginalFileName(...candidates) {
+  for (const candidate of candidates) {
+    const name = trimOrNull(candidate, { maxLength: 255 });
+    if (name && !isGeneratedStorageFileName(name)) {
+      return name;
+    }
+  }
+  return null;
+}
+
 function resolveSubpoenaOriginalFileName({
+  suppliedName = null,
   file = null,
   extract = null,
   existingName = null,
   hasSubpoena = false,
 } = {}) {
-  const fromFile = trimOrNull(file?.originalname, { maxLength: 255 });
-  if (fromFile) return fromFile;
-
-  const fromExtract = trimOrNull(
-    extract?.file_name || extract?.batch_file_name,
-    { maxLength: 255 }
+  const readable = pickReadableOriginalFileName(
+    suppliedName,
+    file?.originalname,
+    extract?.original_file_name,
+    extract?.originalFileName,
+    extract?.batch_original_file_name,
+    existingName
   );
-  if (fromExtract) return fromExtract;
-
+  if (readable) return readable;
   if (!hasSubpoena) return null;
-  return trimOrNull(existingName, { maxLength: 255 });
+  const fallback = trimOrNull(existingName, { maxLength: 255 });
+  return fallback && !isGeneratedStorageFileName(fallback) ? fallback : null;
 }
 
 function persistIncomingOrderUpload(
@@ -2996,6 +3020,7 @@ async function createOrder(data, actorId, files, options = {}) {
       subpoenaFile?.buffer || subpoenaFile?.path
     );
     const sharedSubpoenaOriginalFileName = resolveSubpoenaOriginalFileName({
+      suppliedName: orderInput.subpoenaOriginalFileName,
       file: subpoenaFile,
       extract: linkedExtract,
       hasSubpoena: Boolean(subpoenaExtractId || hasIncomingSubpoenaUpload),
@@ -3713,6 +3738,7 @@ async function updateOrder(id, data, actorId, files) {
         patientOrderSequence ?? existing.patient_order_sequence ?? null,
       subpoenaStoragePath,
       subpoenaOriginalFileName: resolveSubpoenaOriginalFileName({
+        suppliedName: data.subpoenaOriginalFileName,
         file: subpoenaFile,
         extract: linkedExtract,
         existingName: existing.subpoena_original_file_name,

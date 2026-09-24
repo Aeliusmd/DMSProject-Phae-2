@@ -85,19 +85,34 @@ function subpoenaFileName(path) {
   return normalized.split("/").pop() || "Subpoena";
 }
 
+function isGeneratedSubpoenaDisplayName(name) {
+  const base = String(name || "").trim().split(/[\\/]/).pop() || "";
+  if (!base) return true;
+  if (/^[a-f0-9]{32}_\d+\./i.test(base)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(base)) {
+    return true;
+  }
+  if (/^\d+_\d{10,}_\d+_/.test(base)) return true;
+  return false;
+}
+
 function displaySubpoenaName({
   subpoenaFile,
   subpoenaOriginalFileName,
   subpoenaFileName: storedFileName,
   subpoenaStoragePath,
 } = {}) {
-  const fromUpload = `${subpoenaFile?.name || ""}`.trim();
-  if (fromUpload) return fromUpload;
-
   const fromColumn = `${subpoenaOriginalFileName || storedFileName || ""}`.trim();
-  if (fromColumn) return fromColumn;
+  if (fromColumn && !isGeneratedSubpoenaDisplayName(fromColumn)) {
+    return fromColumn;
+  }
 
-  return subpoenaFileName(subpoenaStoragePath);
+  const fromUpload = `${subpoenaFile?.name || ""}`.trim();
+  if (fromUpload && !isGeneratedSubpoenaDisplayName(fromUpload)) {
+    return fromUpload;
+  }
+
+  return fromColumn || subpoenaFileName(subpoenaStoragePath);
 }
 
 const PROVIDER_SYNC_FIELDS = new Set([
@@ -1493,11 +1508,28 @@ function NewOrderPageContent() {
       }
     }
 
-    setFormData((prev) => ({
-      ...(reset ? initialFormData : prev),
-      ...nextUpdates,
-      ...(subpoenaFile ? { subpoenaFile } : {}),
-    }));
+    setFormData((prev) => {
+      const previousOriginal = reset
+        ? ""
+        : `${prev.subpoenaOriginalFileName || ""}`.trim();
+      const fileOriginal = `${subpoenaFile?.name || ""}`.trim();
+      const looksGenerated =
+        /^[a-f0-9]{32}_\d+\./i.test(fileOriginal) ||
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(
+          fileOriginal
+        );
+
+      return {
+        ...(reset ? initialFormData : prev),
+        ...nextUpdates,
+        ...(subpoenaFile ? { subpoenaFile } : {}),
+        subpoenaOriginalFileName:
+          previousOriginal ||
+          `${nextUpdates.subpoenaOriginalFileName || ""}`.trim() ||
+          (fileOriginal && !looksGenerated ? fileOriginal : "") ||
+          "",
+      };
+    });
     setExtractionMeta((prev) => ({ ...prev, ...nextMeta }));
 
     // Suggest system facilities with >= 80% name similarity to the extracted name.
@@ -2317,7 +2349,7 @@ function NewOrderPageContent() {
         next.subpoenaExtractId = "";
         next.subpoenaUrl = "";
         next.subpoenaStoragePath = null;
-        next.subpoenaOriginalFileName = "";
+        next.subpoenaOriginalFileName = file?.name || "";
       }
 
       return next;
@@ -3459,7 +3491,7 @@ function OrderDetailsForm({
               ? "New subpoena (replaces current on save)"
               : "Selected subpoena"
           }
-          fileName={formData.subpoenaFile.name}
+          fileName={displaySubpoenaName(formData)}
           onRemove={readOnly ? undefined : () => onRemoveExistingSubpoena?.()}
         />
       ) : null}
