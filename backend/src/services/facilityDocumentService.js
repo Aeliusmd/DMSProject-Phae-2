@@ -72,15 +72,30 @@ async function createDocument(
     throw new ApiError(400, "Invalid document type");
   }
 
-  const documentId = await FacilityDocument.create({
+  const storagePath = fileStorage.saveFacilityUploadFromMemory(file, {
     facilityId,
-    documentName: file.originalname,
-    uploadType: normalizedType,
-    fileType: FacilityDocument.getFileTypeFromName(file.originalname),
-    storagePath: fileStorage.toStoredFilePath(file.path),
-    fileSizeBytes: file.size,
-    uploadedBy,
+    employeeId: uploadedBy,
+    folderName: "uploads",
   });
+  if (!storagePath) {
+    throw new ApiError(400, "A file is required");
+  }
+
+  let documentId;
+  try {
+    documentId = await FacilityDocument.create({
+      facilityId,
+      documentName: file.originalname,
+      uploadType: normalizedType,
+      fileType: FacilityDocument.getFileTypeFromName(file.originalname),
+      storagePath,
+      fileSizeBytes: file.size,
+      uploadedBy,
+    });
+  } catch (error) {
+    fileStorage.deleteStoredUploadIfExists(storagePath);
+    throw error;
+  }
 
   const document = await FacilityDocument.findById(documentId, facilityId);
 

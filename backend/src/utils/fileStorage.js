@@ -1,8 +1,10 @@
 const fs = require("fs");
 const path = require("path");
+const { randomUUID } = require("crypto");
 const config = require("../config");
 const ApiError = require("./ApiError");
 const { ORDER_UPLOAD_DIRS, ORDER_UPLOADS_ROOT } = require("../middleware/uploadMiddleware");
+const { facilityUploadsDir } = require("../config/uploads");
 const { getFileServerBasePath } = require("../services/appSettingsService");
 
 function getFileServerRoot() {
@@ -292,6 +294,43 @@ function saveOrderUploadFromMemory(
   return toStoredFilePath(relative);
 }
 
+function resolveFacilityFolderId(facilityId) {
+  const safe = String(facilityId || "unknown").replace(/[^\w-]/g, "");
+  return safe || "unknown";
+}
+
+function buildFacilityUploadFileName(file, facilityId) {
+  const extension = path.extname(file?.originalname || "").toLowerCase();
+  return `${randomUUID()}_${Date.now()}_${resolveFacilityFolderId(facilityId)}${extension}`;
+}
+
+/**
+ * Write a facility memory-upload into
+ * facilities/{facilityId}/{uploads|note-attachments}/{userId}/{uuid}_{timestamp}_{facilityId}.ext
+ * after the facility (and note, when attaching) already exists.
+ */
+function saveFacilityUploadFromMemory(file, { facilityId, employeeId, folderName }) {
+  if (!file || !Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+    return null;
+  }
+  if (folderName !== "uploads" && folderName !== "note-attachments") {
+    return null;
+  }
+
+  const facilityFolder = resolveFacilityFolderId(facilityId);
+  const folderId = resolveStaffFolderId(employeeId);
+  const destDir = path.join(facilityUploadsDir, facilityFolder, folderName, folderId);
+  ensureDir(destDir);
+
+  const fileName = buildFacilityUploadFileName(file, facilityId);
+  const destAbsolute = path.join(destDir, fileName);
+  fs.writeFileSync(destAbsolute, file.buffer);
+
+  return toStoredFilePath(
+    `facilities/${facilityFolder}/${folderName}/${folderId}/${fileName}`
+  );
+}
+
 /**
  * Move a disk Multer file into the same order-scoped folder/name as
  * saveOrderUploadFromMemory. Existing stored paths are not rewritten.
@@ -476,6 +515,7 @@ module.exports = {
   resolveOrderNumberFolder,
   moveUploadToOrderFolder,
   saveOrderUploadFromMemory,
+  saveFacilityUploadFromMemory,
   relocateDiskUploadToOrderFolder,
   deleteStoredUploadIfExists,
   archiveBatchScanSubpoenaToProcessed,

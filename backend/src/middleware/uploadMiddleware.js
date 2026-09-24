@@ -1,11 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const multer = require("multer");
-const { randomUUID } = require("crypto");
 const ApiError = require("../utils/ApiError");
 const {
   uploadsRoot,
-  facilityUploadsDir,
   ensureUploadDirs,
 } = require("../config/uploads");
 
@@ -15,33 +13,13 @@ const {
  * {FILE_SERVER}/uploads/facilities/<facilityId>/note-attachments/<userId>/
  * Legacy files under <facilityId>/ or <facilityId>/<type>/ (no user folder)
  * remain readable via the stored DB path.
+ * Facility files stay in memory until the facility (and note, when attaching)
+ * exists, then write with {uuid}_{timestamp}_{facilityId}.
  */
 
 function resolveUploaderFolderId(req) {
   const id = Number(req?.user?.id);
   return Number.isFinite(id) && id > 0 ? String(id) : "system";
-}
-
-function resolveFacilityFolderId(req) {
-  const raw = String(req?.params?.id || "unknown");
-  const safe = raw.replace(/[^\w-]/g, "");
-  return safe || "unknown";
-}
-
-function facilitySubdir(req, folderName) {
-  const dir = path.join(
-    facilityUploadsDir,
-    resolveFacilityFolderId(req),
-    folderName,
-    resolveUploaderFolderId(req)
-  );
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
-function buildFacilityDiskFileName(req, file) {
-  const extension = path.extname(file.originalname || "").toLowerCase();
-  return `${randomUUID()}_${Date.now()}_${resolveFacilityFolderId(req)}${extension}`;
 }
 
 /**
@@ -113,19 +91,6 @@ function sanitizeFileName(originalName) {
   return `${base || "file"}${ext.toLowerCase()}`;
 }
 
-/**
- * Facility upload storage
- */
-const facilityStorage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    cb(null, facilitySubdir(req, "uploads"));
-  },
-
-  filename: (req, file, cb) => {
-    cb(null, buildFacilityDiskFileName(req, file));
-  },
-});
-
 function facilityFileFilter(_req, file, cb) {
   if (FACILITY_ALLOWED_MIME_TYPES.has(file.mimetype)) {
     cb(null, true);
@@ -135,32 +100,17 @@ function facilityFileFilter(_req, file, cb) {
   cb(new ApiError(400, "Unsupported file type"));
 }
 
-const facilityDocumentUpload = multer({
-  storage: facilityStorage,
-  fileFilter: facilityFileFilter,
-  limits: {
-    fileSize: 15 * 1024 * 1024,
-  },
-});
-
-const facilityNoteAttachmentStorage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    cb(null, facilitySubdir(req, "note-attachments"));
-  },
-
-  filename: (req, file, cb) => {
-    cb(null, buildFacilityDiskFileName(req, file));
-  },
-});
-
-const facilityNoteAttachmentUpload = multer({
-  storage: facilityNoteAttachmentStorage,
+const facilityFormMemoryUpload = multer({
+  storage: multer.memoryStorage(),
   fileFilter: facilityFileFilter,
   limits: {
     fileSize: 15 * 1024 * 1024,
     files: 10,
   },
 });
+
+const facilityDocumentUpload = facilityFormMemoryUpload;
+const facilityNoteAttachmentUpload = facilityFormMemoryUpload;
 
 function orderFileFilter(_req, file, cb) {
   if (file.fieldname === "subpoenaFile") {

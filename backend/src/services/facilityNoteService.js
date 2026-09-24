@@ -155,17 +155,36 @@ async function createNote(facilityId, { note }, actorId, files = [], options = {
   }
 
   let savedAttachments = [];
+  const writtenPaths = [];
 
   if (files.length) {
-    savedAttachments = await FacilityNoteAttachment.createMany(
-      files.map((file) => ({
-        facilityNoteId: created.id,
-        storagePath: fileStorage.toStoredFilePath(file.path),
-        originalFilename: file.originalname || "attachment",
-        mimeType: file.mimetype || "",
-        fileSizeBytes: file.size || 0,
-      }))
-    );
+    try {
+      const attachmentRows = files.map((file) => {
+        const storagePath = fileStorage.saveFacilityUploadFromMemory(file, {
+          facilityId,
+          employeeId: actorId,
+          folderName: "note-attachments",
+        });
+        if (!storagePath) {
+          throw new ApiError(400, "A file is required");
+        }
+        writtenPaths.push(storagePath);
+        return {
+          facilityNoteId: created.id,
+          storagePath,
+          originalFilename: file.originalname || "attachment",
+          mimeType: file.mimetype || "",
+          fileSizeBytes: file.size || 0,
+        };
+      });
+
+      savedAttachments = await FacilityNoteAttachment.createMany(attachmentRows);
+    } catch (error) {
+      writtenPaths.forEach((storagePath) => {
+        fileStorage.deleteStoredUploadIfExists(storagePath);
+      });
+      throw error;
+    }
   }
 
   const attachmentsByNoteId = {
