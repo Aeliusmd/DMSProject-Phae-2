@@ -11,6 +11,7 @@ const {
 } = require("../validators/facilityValidator");
 const { validateSearchQuery, validatePositiveIntRouteParam } = require("../validators/queryValidators");
 const facilityService = require("../services/facilityService");
+const facilityEditLockService = require("../services/facilityEditLockService");
 const activityLogService = require("../services/activityLogService");
 const notificationService = require("../services/notificationService");
 
@@ -105,6 +106,30 @@ exports.getById = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, { facility });
 });
 
+exports.acquireEditLock = asyncHandler(async (req, res) => {
+  const lock = await facilityEditLockService.acquireFacilityEditLock(
+    req.params.id,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Facility edit lock acquired");
+});
+
+exports.heartbeatEditLock = asyncHandler(async (req, res) => {
+  const lock = await facilityEditLockService.heartbeatFacilityEditLock(
+    req.params.id,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Facility edit lock refreshed");
+});
+
+exports.releaseEditLock = asyncHandler(async (req, res) => {
+  const result = await facilityEditLockService.releaseFacilityEditLock(
+    req.params.id,
+    req.user.id
+  );
+  return ApiResponse.success(res, result, "Facility edit lock released");
+});
+
 exports.create = asyncHandler(async (req, res) => {
   throwIfInvalid(validateCreateFacility(req.body));
   const facility = await facilityService.createFacility(req.body);
@@ -130,6 +155,10 @@ exports.create = asyncHandler(async (req, res) => {
 
 exports.update = asyncHandler(async (req, res) => {
   throwIfInvalid(validateUpdateFacility(req.body));
+  await facilityEditLockService.assertNotLockedByOther(
+    req.params.id,
+    req.user.id
+  );
   const before = await facilityService.getFacilityById(req.params.id);
   const facility = await facilityService.updateFacility(
     req.params.id,
@@ -190,6 +219,10 @@ exports.resolveDoctor = asyncHandler(async (req, res) => {
 
 exports.createDoctors = asyncHandler(async (req, res) => {
   throwIfInvalid(validateCreateDoctors(req.body));
+  await facilityEditLockService.assertNotLockedByOther(
+    req.params.id,
+    req.user.id
+  );
   const facility = await facilityService.getFacilityById(req.params.id);
   const doctors = await facilityService.createDoctors(
     req.params.id,
@@ -214,6 +247,10 @@ exports.createDoctors = asyncHandler(async (req, res) => {
 
 exports.updateDoctor = asyncHandler(async (req, res) => {
   throwIfInvalid(validateUpdateDoctor(req.body || {}));
+  await facilityEditLockService.assertNotLockedByOther(
+    req.params.id,
+    req.user.id
+  );
   const facility = await facilityService.getFacilityById(req.params.id);
   const doctor = await facilityService.updateDoctor(
     req.params.id,
@@ -238,6 +275,10 @@ exports.updateDoctor = asyncHandler(async (req, res) => {
 });
 
 exports.deactivateDoctor = asyncHandler(async (req, res) => {
+  await facilityEditLockService.assertNotLockedByOther(
+    req.params.id,
+    req.user.id
+  );
   const facility = await facilityService.getFacilityById(req.params.id);
   const doctor = await facilityService.deactivateDoctor(
     req.params.id,
@@ -261,6 +302,10 @@ exports.deactivateDoctor = asyncHandler(async (req, res) => {
 });
 
 exports.reactivateDoctor = asyncHandler(async (req, res) => {
+  await facilityEditLockService.assertNotLockedByOther(
+    req.params.id,
+    req.user.id
+  );
   const facility = await facilityService.getFacilityById(req.params.id);
   const doctor = await facilityService.reactivateDoctor(
     req.params.id,
@@ -284,6 +329,10 @@ exports.reactivateDoctor = asyncHandler(async (req, res) => {
 });
 
 exports.setDefaultDoctor = asyncHandler(async (req, res) => {
+  await facilityEditLockService.assertNotLockedByOther(
+    req.params.id,
+    req.user.id
+  );
   const facility = await facilityService.getFacilityById(req.params.id);
   const doctor = await facilityService.setDefaultDoctor(
     req.params.id,

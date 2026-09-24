@@ -39,6 +39,10 @@ import {
   updateFacility,
   uploadFacilityDocument,
 } from "@/lib/facilities/facilityApi";
+import {
+  FACILITY_EDIT_LOCK_MESSAGE,
+  useFacilityEditLock,
+} from "@/lib/facilities/useFacilityEditLock";
 
 const CONTACT_NAME_FIELDS = [
   { field: "firstName", label: "First name" },
@@ -197,16 +201,19 @@ export default function FacilityDetailsPage() {
   }, [facilityId]);
 
   useEffect(() => {
+    if (lockStatus !== "held") return;
     loadFacility();
-  }, [loadFacility]);
+  }, [loadFacility, lockStatus]);
 
   useEffect(() => {
+    if (lockStatus !== "held") return;
     loadDocuments();
-  }, [loadDocuments]);
+  }, [loadDocuments, lockStatus]);
 
   useEffect(() => {
+    if (lockStatus !== "held") return;
     loadNotes();
-  }, [loadNotes]);
+  }, [loadNotes, lockStatus]);
 
   useEffect(() => {
     if (focusSection !== "doctors" || loading) return undefined;
@@ -809,7 +816,39 @@ export default function FacilityDetailsPage() {
     return doctorErrors[`doctors.${index}.${field}`] || "";
   };
 
-  if (loading) {
+  if (lockStatus === "blocked") {
+    return (
+      <DashboardShell>
+        <div className="pointer-events-none mx-auto w-full max-w-[1220px] select-none blur-[4px]">
+          <div className="flex flex-col gap-5">
+            <h1 className="text-[18px] font-semibold text-[#111827]">
+              Facility Information
+            </h1>
+            <section className="min-h-[420px] rounded-[10px] border border-[#E2E8F0] bg-white px-5 py-5 shadow-sm">
+              <div className="h-5 w-48 rounded bg-[#E2E8F0]" />
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="h-10 rounded bg-[#F1F5F9]" />
+                <div className="h-10 rounded bg-[#F1F5F9]" />
+                <div className="h-10 rounded bg-[#F1F5F9]" />
+              </div>
+              <div className="mt-4 h-10 rounded bg-[#F1F5F9]" />
+              <div className="mt-4 h-10 rounded bg-[#F1F5F9]" />
+            </section>
+          </div>
+        </div>
+        <AlertModal
+          open
+          variant="error"
+          title="Facility is being edited"
+          message={FACILITY_EDIT_LOCK_MESSAGE}
+          confirmLabel="OK"
+          onClose={() => router.push("/facilities")}
+        />
+      </DashboardShell>
+    );
+  }
+
+  if (lockStatus === "checking" || (lockStatus === "held" && loading)) {
     return (
       <DashboardShell>
         <div className="flex min-h-[calc(100vh-92px)] items-center justify-center text-[13px] text-[#64748B]">
@@ -819,11 +858,11 @@ export default function FacilityDetailsPage() {
     );
   }
 
-  if (loadError || !formData) {
+  if (lockStatus === "error" || loadError || !formData) {
     return (
       <DashboardShell>
         <div className="flex min-h-[calc(100vh-92px)] flex-col items-center justify-center gap-4">
-          <p className="text-[13px] font-semibold text-red-600">{loadError || "Facility not found"}</p>
+          <p className="text-[13px] font-semibold text-red-600">{lockError || loadError || "Facility not found"}</p>
           <Link
             href="/facilities"
             className="text-[12px] font-semibold text-[#007F96] hover:underline"

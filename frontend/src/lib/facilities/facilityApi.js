@@ -90,6 +90,33 @@ export async function getFacility(id) {
   return data?.data?.facility || null;
 }
 
+export async function acquireFacilityEditLock(facilityId) {
+  const data = await request(`/facilities/${facilityId}/edit-lock`, {
+    method: "POST",
+    auth: true,
+  });
+  return data?.data?.lock || null;
+}
+
+export async function heartbeatFacilityEditLock(facilityId) {
+  const data = await request(`/facilities/${facilityId}/edit-lock/heartbeat`, {
+    method: "POST",
+    auth: true,
+  });
+  return data?.data?.lock || null;
+}
+
+export async function releaseFacilityEditLock(facilityId) {
+  try {
+    await authFetch(`/facilities/${facilityId}/edit-lock`, {
+      method: "DELETE",
+      keepalive: true,
+    });
+  } catch {
+    // Leaving the page should not fail if release cannot complete.
+  }
+}
+
 export async function createFacility(payload) {
   const data = await request("/facilities", {
     method: "POST",

@@ -47,6 +47,10 @@ router.get(
   facilityNoteController.downloadAttachment
 );
 
+router.post("/:id/edit-lock", facilityController.acquireEditLock);
+router.post("/:id/edit-lock/heartbeat", facilityController.heartbeatEditLock);
+router.delete("/:id/edit-lock", facilityController.releaseEditLock);
+
 router.get("/:id", facilityController.getById);
 router.put("/:id", facilityController.update);
 router.delete("/:id", employeeDeleteGuard, facilityController.remove);
