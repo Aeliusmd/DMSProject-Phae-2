@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import useIsClient from "@/hooks/useIsClient";
 import { getOrderNotesPaginated, updateOrderNote } from "@/lib/orders/orderApi";
+import {
+  ORDER_NOTE_EDIT_LOCK_MESSAGE,
+  useOrderNoteEditLock,
+} from "@/lib/orders/useOrderNoteEditLock";
 import {
   buildCallbackLine,
   filterNotesByDate,
@@ -13,6 +18,7 @@ import {
   validateNoteForm,
 } from "@/lib/orders/orderNoteUtils";
 import OrderNoteFormFields from "@/components/orders/OrderNoteFormFields";
+import AlertModal from "@/components/ui/AlertModal";
 import {
   getMinFutureDateTimeLocal,
   utcIsoToDateTimeLocal,
@@ -35,7 +41,14 @@ const NOTES_LIST_MAX_HEIGHT =
   (VISIBLE_NOTE_COUNT - 1) * 8;
 const NOTES_PAGE_SIZE = 10;
 
-export default function OrderNotesListModal({ isOpen, order, onClose, onSaved }) {
+export default function OrderNotesListModal({
+  isOpen,
+  order,
+  onClose,
+  onSaved,
+  returnToPath = "/orders",
+}) {
+  const router = useRouter();
   const mounted = useIsClient();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -53,12 +66,21 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
   const [markCalledPending, setMarkCalledPending] = useState(false);
   const [dateFilters, setDateFilters] = useState(EMPTY_DATE_FILTERS);
   const [appliedDateFilters, setAppliedDateFilters] = useState(EMPTY_DATE_FILTERS);
+  const [noteLockBlocked, setNoteLockBlocked] = useState(false);
 
   const orderId = order?.dbId ?? order?.id ?? null;
   const expandedNote = notes.find(
     (item) => Number(item.id) === Number(expandedNoteId)
   );
   const isReadOnly = Boolean(expandedNote?.isCalled);
+  const lockNoteId =
+    isOpen && orderId && expandedNoteId && !isReadOnly ? expandedNoteId : null;
+  const { status: lockStatus, error: lockError } = useOrderNoteEditLock(
+    orderId,
+    lockNoteId
+  );
+  const canEditNote = !isReadOnly && lockStatus === "held";
+  const listBackHref = returnToPath || "/orders";
 
   const filteredNotes = useMemo(
     () => filterNotesByDate(notes, appliedDateFilters),
@@ -149,6 +171,16 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
       document.body.style.overflow = originalOverflow;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setNoteLockBlocked(false);
+      return;
+    }
+    if (lockStatus === "blocked") {
+      setNoteLockBlocked(true);
+    }
+  }, [isOpen, lockStatus]);
 
   const noteValidationErrors = useMemo(
     () =>
@@ -276,6 +308,11 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
       applyExpandedNote(savedNote);
       onSaved?.();
     } catch (err) {
+      if (Number(err?.status) === 409) {
+        setNoteLockBlocked(true);
+        return;
+      }
+
       const { fieldErrors, message } = applyApiFieldErrors(err, {
         note: "noteText",
         file: "attachment",
@@ -311,9 +348,18 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
     resetExpandedForm();
   };
 
+  const handleLockDismiss = () => {
+    onClose?.();
+    router.push(listBackHref);
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-[2px]">
-      <section className="flex max-h-[calc(100vh-44px)] w-full max-w-[760px] flex-col overflow-hidden rounded-[8px] bg-white shadow-2xl">
+      <section
+        className={`flex max-h-[calc(100vh-44px)] w-full max-w-[760px] flex-col overflow-hidden rounded-[8px] bg-white shadow-2xl ${
+          noteLockBlocked ? "pointer-events-none select-none blur-[4px]" : ""
+        }`}
+      >
         <div className="flex h-[48px] shrink-0 items-start justify-between border-b border-[#E2E8F0] px-5 py-3">
           <div className="min-w-0">
             <h2 className="text-[13px] font-semibold text-[#111827]">
@@ -374,6 +420,11 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden px-5 py-4">
+          {lockStatus === "error" && lockError ? (
+            <p className="mb-3 rounded-[6px] border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-[11px] font-medium text-red-600">
+              {lockError}
+            </p>
+          ) : null}
           {loading ? (
             <p className="py-8 text-center text-[12px] text-[#94A3B8]">
               Loading notes...
@@ -449,7 +500,7 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
                           attachment={attachment}
                           existingAttachmentUrl={existingAttachmentUrl}
                           errors={errors}
-                          readOnly={isReadOnly}
+                          readOnly={!canEditNote}
                           minCallbackDateTime={getMinFutureDateTimeLocal()}
                           onNoteTextChange={(value) => {
                             setNoteText(value);
@@ -467,16 +518,20 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
                             <button
                               type="button"
                               onClick={handleSave}
-                              disabled={saving || isNoteInvalid}
+                              disabled={saving || isNoteInvalid || !canEditNote}
                               className="inline-flex h-[32px] items-center justify-center rounded-[6px] bg-[#0097B2] px-4 text-[11px] font-semibold text-white hover:bg-[#0086A0] disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              {saving ? "Saving..." : "Save"}
+                              {saving
+                                ? "Saving..."
+                                : lockStatus === "checking"
+                                  ? "Checking..."
+                                  : "Save"}
                             </button>
 
                             <button
                               type="button"
                               onClick={handleCall}
-                              disabled={saving}
+                              disabled={saving || !canEditNote}
                               className="inline-flex h-[32px] items-center justify-center rounded-[6px] bg-[#111827] px-4 text-[11px] font-semibold text-white hover:bg-[#1F2937] disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               Called
@@ -506,6 +561,14 @@ export default function OrderNotesListModal({ isOpen, order, onClose, onSaved })
           )}
         </div>
       </section>
+      <AlertModal
+        open={noteLockBlocked}
+        variant="error"
+        title="Note is being edited"
+        message={ORDER_NOTE_EDIT_LOCK_MESSAGE}
+        confirmLabel="OK"
+        onClose={handleLockDismiss}
+      />
     </div>,
     document.body
   );

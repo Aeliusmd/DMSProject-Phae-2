@@ -343,6 +343,39 @@ export async function createOrderNote(
   return data?.data?.notes || [];
 }
 
+export async function acquireOrderNoteEditLock(orderId, noteId) {
+  const data = await request(
+    `/orders/${orderId}/notes/${noteId}/edit-lock`,
+    {
+      method: "POST",
+      auth: true,
+    }
+  );
+  return data?.data?.lock || null;
+}
+
+export async function heartbeatOrderNoteEditLock(orderId, noteId) {
+  const data = await request(
+    `/orders/${orderId}/notes/${noteId}/edit-lock/heartbeat`,
+    {
+      method: "POST",
+      auth: true,
+    }
+  );
+  return data?.data?.lock || null;
+}
+
+export async function releaseOrderNoteEditLock(orderId, noteId) {
+  try {
+    await authFetch(`/orders/${orderId}/notes/${noteId}/edit-lock`, {
+      method: "DELETE",
+      keepalive: true,
+    });
+  } catch {
+    // Leaving the note editor should not fail if release cannot complete.
+  }
+}
+
 export async function updateOrderNote(
   orderId,
   noteId,

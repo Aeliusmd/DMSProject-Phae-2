@@ -2852,6 +2852,15 @@ export default function OrdersTable({
       <OrderNotesListModal
         isOpen={Boolean(selectedNoteListOrder)}
         order={selectedNoteListOrder}
+        returnToPath={
+          listReturnTo === "reports"
+            ? "/reports"
+            : listReturnTo === "personal-orders" || personalMode
+              ? "/personal-orders"
+              : listReturnTo === "company-orders" || companyPortalMode
+                ? "/company-orders"
+                : "/orders"
+        }
         onClose={() => setSelectedNoteListOrder(null)}
         onSaved={() => fetchOrders({ silent: true, force: true })}
       />

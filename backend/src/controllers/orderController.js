@@ -8,6 +8,7 @@ const {
 } = require("../utils/responseUtils");
 const orderService = require("../services/orderService");
 const orderEditLockService = require("../services/orderEditLockService");
+const orderNoteEditLockService = require("../services/orderNoteEditLockService");
 const batchScanService = require("../services/batchScanService");
 const activityLogService = require("../services/activityLogService");
 const notificationService = require("../services/notificationService");
@@ -636,7 +637,39 @@ exports.createNote = asyncHandler(async (req, res) => {
   return ApiResponse.created(res, { notes }, "Note added successfully");
 });
 
+exports.acquireNoteEditLock = asyncHandler(async (req, res) => {
+  const lock = await orderNoteEditLockService.acquireOrderNoteEditLock(
+    req.params.id,
+    req.params.noteId,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Note edit lock acquired");
+});
+
+exports.heartbeatNoteEditLock = asyncHandler(async (req, res) => {
+  const lock = await orderNoteEditLockService.heartbeatOrderNoteEditLock(
+    req.params.id,
+    req.params.noteId,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Note edit lock refreshed");
+});
+
+exports.releaseNoteEditLock = asyncHandler(async (req, res) => {
+  const result = await orderNoteEditLockService.releaseOrderNoteEditLock(
+    req.params.id,
+    req.params.noteId,
+    req.user.id
+  );
+  return ApiResponse.success(res, result, "Note edit lock released");
+});
+
 exports.updateNote = asyncHandler(async (req, res) => {
+  await orderNoteEditLockService.assertNotLockedByOther(
+    req.params.id,
+    req.params.noteId,
+    req.user.id
+  );
   const validation = validateOrderNote(req.body);
 
   if (!validation.valid) {

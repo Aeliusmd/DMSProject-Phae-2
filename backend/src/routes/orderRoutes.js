@@ -60,6 +60,18 @@ router.post("/:id/restore", orderController.restore);
 
 router.get("/:id/notes", orderController.getNotes);
 router.post("/:id/notes", uploadNoteAttachment, orderController.createNote);
+router.post(
+  "/:id/notes/:noteId/edit-lock",
+  orderController.acquireNoteEditLock
+);
+router.post(
+  "/:id/notes/:noteId/edit-lock/heartbeat",
+  orderController.heartbeatNoteEditLock
+);
+router.delete(
+  "/:id/notes/:noteId/edit-lock",
+  orderController.releaseNoteEditLock
+);
 router.put(
   "/:id/notes/:noteId",
   uploadNoteAttachment,
