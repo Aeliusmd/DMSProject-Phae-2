@@ -292,6 +292,36 @@ function saveOrderUploadFromMemory(
   return toStoredFilePath(relative);
 }
 
+/**
+ * Move a disk Multer file into the same order-scoped folder/name as
+ * saveOrderUploadFromMemory. Existing stored paths are not rewritten.
+ */
+function relocateDiskUploadToOrderFolder(
+  file,
+  { typeRoot, employeeId, orderNumber, orderId }
+) {
+  const sourceAbsolute = file?.path ? path.resolve(file.path) : "";
+  if (!sourceAbsolute || !fs.existsSync(sourceAbsolute) || !typeRoot) {
+    return null;
+  }
+
+  const destDir = staffOrderUploadDir(typeRoot, employeeId, orderNumber);
+  const fileName = buildOrderMemoryFileName(file, orderId, orderNumber);
+  const destAbsolute = path.resolve(path.join(destDir, fileName));
+
+  if (sourceAbsolute !== destAbsolute) {
+    fs.renameSync(sourceAbsolute, destAbsolute);
+  }
+
+  const folderId = resolveStaffFolderId(employeeId);
+  const orderFolder = resolveOrderNumberFolder(orderNumber);
+  const typeKey = orderUploadTypeKey(typeRoot);
+  const relative = orderFolder
+    ? `${typeKey}/${folderId}/${orderFolder}/${fileName}`
+    : `${typeKey}/${folderId}/${fileName}`;
+  return toStoredFilePath(relative);
+}
+
 function deleteStoredUploadIfExists(storagePath) {
   if (!storagePath) return;
   try {
@@ -446,6 +476,7 @@ module.exports = {
   resolveOrderNumberFolder,
   moveUploadToOrderFolder,
   saveOrderUploadFromMemory,
+  relocateDiskUploadToOrderFolder,
   deleteStoredUploadIfExists,
   archiveBatchScanSubpoenaToProcessed,
   deleteUnusedProcessedSubpoenaUpload,

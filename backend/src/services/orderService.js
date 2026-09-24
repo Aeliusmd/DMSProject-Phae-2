@@ -4063,11 +4063,18 @@ async function scanMedicalRecords(
       await OrderRecord.insertScan(connection, {
         orderId,
         recordType: normalizedType,
-        storagePath: nestOrderUploadPath(
-          toRelativeStoragePath(file),
-          actorId,
-          existing.order_number
-        ),
+        storagePath:
+          fileStorage.relocateDiskUploadToOrderFolder(file, {
+            typeRoot: ORDER_UPLOAD_DIRS.medicalRecords,
+            employeeId: actorId,
+            orderNumber: existing.order_number,
+            orderId,
+          }) ||
+          nestOrderUploadPath(
+            toRelativeStoragePath(file),
+            actorId,
+            existing.order_number
+          ),
         originalFileName: file.originalname || null,
         pageCount,
         uploadedBy: actorId || null,

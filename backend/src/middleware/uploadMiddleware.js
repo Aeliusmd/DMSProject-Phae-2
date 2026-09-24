@@ -200,9 +200,9 @@ const medicalRecordsStorage = multer.diskStorage({
     cb(null, staffUploadDir(ORDER_UPLOAD_DIRS.medicalRecords, req));
   },
   filename(req, file, cb) {
-    const orderId = req.params.id || "order";
-    const unique = `${orderId}-${Date.now()}`;
-    cb(null, `${unique}-${sanitizeFileName(file.originalname)}`);
+    const orderId = String(req.params.id || "order").replace(/[^\w-]/g, "") || "order";
+    const unique = `${orderId}_${Date.now()}_${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${unique}_${sanitizeFileName(file.originalname)}`);
   },
 });
 
