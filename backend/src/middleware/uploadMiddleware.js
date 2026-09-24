@@ -54,7 +54,8 @@ function buildFacilityDiskFileName(req, file) {
  *
  * Employee folders are created on first file write, not at user creation.
  * Order-number folders are created when the order number is known.
- * Multer writes under {employeeId}/ first; the file is then moved into {orderNumber}/.
+ * Create/update order files and order-note attachments stay in memory until
+ * the order id exists, then write under {employeeId}/{orderNumber}/.
  */
 
 const ORDER_UPLOADS_ROOT = uploadsRoot;
@@ -65,12 +66,6 @@ const ORDER_UPLOAD_DIRS = {
   orderNotes: path.join(ORDER_UPLOADS_ROOT, "notes_attachments"),
   medicalRecords: path.join(ORDER_UPLOADS_ROOT, "medical-records"),
   personalPortalLicenses: path.join(ORDER_UPLOADS_ROOT, "personal-portal", "licenses"),
-};
-
-const FIELD_DESTINATIONS = {
-  subpoenaFile: ORDER_UPLOAD_DIRS.processedSubpoena,
-  additionalDocumentFile: ORDER_UPLOAD_DIRS.additionalDocuments,
-  attachment: ORDER_UPLOAD_DIRS.orderNotes,
 };
 
 function staffUploadDir(typeRoot, req) {
@@ -167,22 +162,6 @@ const facilityNoteAttachmentUpload = multer({
   },
 });
 
-/**
- * Order / subpoena / note attachment storage
- */
-const orderStorage = multer.diskStorage({
-  destination(req, file, cb) {
-    const typeRoot =
-      FIELD_DESTINATIONS[file.fieldname] || ORDER_UPLOAD_DIRS.processedSubpoena;
-    cb(null, staffUploadDir(typeRoot, req));
-  },
-
-  filename(_req, file, cb) {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${unique}-${sanitizeFileName(file.originalname)}`);
-  },
-});
-
 function orderFileFilter(_req, file, cb) {
   if (file.fieldname === "subpoenaFile") {
     if (file.mimetype === "application/pdf") {
@@ -201,20 +180,20 @@ function orderFileFilter(_req, file, cb) {
   cb(new ApiError(400, "Only PDF, Word, JPG, or PNG files are allowed"));
 }
 
-const orderUpload = multer({
-  storage: orderStorage,
+const orderFormMemoryUpload = multer({
+  storage: multer.memoryStorage(),
   fileFilter: orderFileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024,
   },
 });
 
-const uploadOrderFiles = orderUpload.fields([
+const uploadOrderFiles = orderFormMemoryUpload.fields([
   { name: "subpoenaFile", maxCount: 1 },
   { name: "additionalDocumentFile", maxCount: 1 },
 ]);
 
-const uploadNoteAttachment = orderUpload.single("attachment");
+const uploadNoteAttachment = orderFormMemoryUpload.single("attachment");
 
 const medicalRecordsStorage = multer.diskStorage({
   destination(req, _file, cb) {
@@ -242,7 +221,7 @@ const uploadMedicalRecordsScan = multer({
 }).array("file", 20);
 
 function toRelativeStoragePath(file) {
-  if (!file) return null;
+  if (!file?.path) return null;
   const rel = path.relative(ORDER_UPLOADS_ROOT, file.path).split(path.sep).join("/");
   if (!rel || rel.startsWith("..")) return null;
   return `\\uploads\\${rel.replace(/\//g, "\\")}`;
@@ -310,7 +289,6 @@ module.exports = {
   ORDER_UPLOADS_ROOT,
   ORDER_UPLOAD_DIRS,
   resolveUploaderFolderId,
-  orderUpload,
   uploadOrderFiles,
   uploadNoteAttachment,
   toRelativeStoragePath,

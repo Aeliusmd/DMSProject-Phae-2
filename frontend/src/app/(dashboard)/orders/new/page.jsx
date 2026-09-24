@@ -81,7 +81,23 @@ function toFileUrl(path) {
 
 function subpoenaFileName(path) {
   if (!path) return "Subpoena";
-  return path.split("/").pop() || "Subpoena";
+  const normalized = String(path).replace(/\\/g, "/");
+  return normalized.split("/").pop() || "Subpoena";
+}
+
+function displaySubpoenaName({
+  subpoenaFile,
+  subpoenaOriginalFileName,
+  subpoenaFileName: storedFileName,
+  subpoenaStoragePath,
+} = {}) {
+  const fromUpload = `${subpoenaFile?.name || ""}`.trim();
+  if (fromUpload) return fromUpload;
+
+  const fromColumn = `${subpoenaOriginalFileName || storedFileName || ""}`.trim();
+  if (fromColumn) return fromColumn;
+
+  return subpoenaFileName(subpoenaStoragePath);
 }
 
 const PROVIDER_SYNC_FIELDS = new Set([
@@ -120,6 +136,7 @@ const initialFormData = {
   documentName: "",
   subpoenaFile: null,
   subpoenaExtractId: "",
+  subpoenaOriginalFileName: "",
   additionalDocumentFile: null,
 
   orderNumber: "",
@@ -2300,6 +2317,7 @@ function NewOrderPageContent() {
         next.subpoenaExtractId = "";
         next.subpoenaUrl = "";
         next.subpoenaStoragePath = null;
+        next.subpoenaOriginalFileName = "";
       }
 
       return next;
@@ -2407,6 +2425,8 @@ function NewOrderPageContent() {
       subpoenaFile: null,
       subpoenaUrl: order.subpoenaUrl || "",
       subpoenaStoragePath: order.subpoenaStoragePath || null,
+      subpoenaOriginalFileName:
+        order.subpoenaOriginalFileName || order.subpoenaFileName || "",
       additionalDocumentFile: null,
       documentName: "",
     }));
@@ -2426,6 +2446,7 @@ function NewOrderPageContent() {
       next.subpoenaExtractId = "";
       next.subpoenaUrl = "";
       next.subpoenaStoragePath = null;
+      next.subpoenaOriginalFileName = "";
       return next;
     });
     setExtractionMeta({
@@ -2776,7 +2797,7 @@ function NewOrderPageContent() {
                     ? undefined
                     : editSubpoenaSrc
                 }
-                name={subpoenaFileName(formData.subpoenaStoragePath)}
+                name={displaySubpoenaName(formData)}
                 loading={!formData.subpoenaFile && editSubpoenaLoading}
                 error={
                   formData.subpoenaFile
@@ -3456,7 +3477,7 @@ function OrderDetailsForm({
       {!formData.subpoenaFile && formData.subpoenaUrl && (
         <ExistingFileLink
           label="Current subpoena"
-          name={subpoenaFileName(formData.subpoenaStoragePath)}
+          name={displaySubpoenaName(formData)}
           href={toFileUrl(formData.subpoenaUrl)}
           onRemove={
             readOnly ? undefined : () => onRemoveExistingSubpoena?.()

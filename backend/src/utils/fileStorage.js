@@ -250,6 +250,60 @@ const ORDER_SCOPED_UPLOAD_ROOTS = new Set([
   "medical-records",
 ]);
 
+function orderUploadTypeKey(typeRoot) {
+  const relative = path.relative(ORDER_UPLOADS_ROOT, typeRoot).replace(/\\/g, "/");
+  return relative && !relative.startsWith("..") ? relative : path.basename(typeRoot);
+}
+
+function buildOrderMemoryFileName(file, orderId, orderNumber) {
+  const original = file?.originalname || "file";
+  const extension = path.extname(original).toLowerCase();
+  const stem = sanitizeFileStem(original);
+  const safeOrderId = String(orderId || "order").replace(/[^\w-]/g, "") || "order";
+  const safeOrderNumber = resolveOrderNumberFolder(orderNumber) || "order";
+  return `${safeOrderId}_${Date.now()}_${Math.round(Math.random() * 1e9)}_${safeOrderNumber}_${stem}${extension}`;
+}
+
+/**
+ * Write a memory-upload buffer into
+ * {type}/{userId}/{orderNumber}/{orderId}_{timestamp}_{random}_{orderNumber}_{name}.
+ * Used after the order id is known so create/update/notes do not leave orphans.
+ */
+function saveOrderUploadFromMemory(
+  file,
+  { typeRoot, employeeId, orderNumber, orderId }
+) {
+  if (!file || !Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+    return null;
+  }
+  if (!typeRoot) return null;
+
+  const destDir = staffOrderUploadDir(typeRoot, employeeId, orderNumber);
+  const fileName = buildOrderMemoryFileName(file, orderId, orderNumber);
+  const destAbsolute = path.join(destDir, fileName);
+  fs.writeFileSync(destAbsolute, file.buffer);
+
+  const folderId = resolveStaffFolderId(employeeId);
+  const orderFolder = resolveOrderNumberFolder(orderNumber);
+  const typeKey = orderUploadTypeKey(typeRoot);
+  const relative = orderFolder
+    ? `${typeKey}/${folderId}/${orderFolder}/${fileName}`
+    : `${typeKey}/${folderId}/${fileName}`;
+  return toStoredFilePath(relative);
+}
+
+function deleteStoredUploadIfExists(storagePath) {
+  if (!storagePath) return;
+  try {
+    const absolutePath = resolveStoredAbsolutePath(storagePath);
+    if (absolutePath && fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+  } catch {
+    // Non-fatal cleanup after a rolled-back request.
+  }
+}
+
 function staffOrderUploadDir(typeRoot, employeeId, orderNumber) {
   const folderId = resolveStaffFolderId(employeeId);
   const orderFolder = resolveOrderNumberFolder(orderNumber);
@@ -391,6 +445,8 @@ module.exports = {
   resolveOrderStorageAbsolutePath,
   resolveOrderNumberFolder,
   moveUploadToOrderFolder,
+  saveOrderUploadFromMemory,
+  deleteStoredUploadIfExists,
   archiveBatchScanSubpoenaToProcessed,
   deleteUnusedProcessedSubpoenaUpload,
 };

@@ -40,7 +40,10 @@ const {
 } = require("../lib/reportQueryParser");
 const { FIELD_LIMITS } = require("../utils/fieldLimits");
 const { sanitizeZip, sanitizeZipOrNull } = require("../utils/zipUtils");
-const { toRelativeStoragePath } = require("../middleware/uploadMiddleware");
+const {
+  ORDER_UPLOAD_DIRS,
+  toRelativeStoragePath,
+} = require("../middleware/uploadMiddleware");
 const {
   sumRegularInvoicePageCount,
   sumXrayInvoicePageCount,
@@ -487,20 +490,62 @@ function nestOrderUploadPath(relativePath, actorId, orderNumber) {
   return fileStorage.moveUploadToOrderFolder(relativePath, actorId, orderNumber);
 }
 
+function resolveSubpoenaOriginalFileName({
+  file = null,
+  extract = null,
+  existingName = null,
+  hasSubpoena = false,
+} = {}) {
+  const fromFile = trimOrNull(file?.originalname, { maxLength: 255 });
+  if (fromFile) return fromFile;
+
+  const fromExtract = trimOrNull(
+    extract?.file_name || extract?.batch_file_name,
+    { maxLength: 255 }
+  );
+  if (fromExtract) return fromExtract;
+
+  if (!hasSubpoena) return null;
+  return trimOrNull(existingName, { maxLength: 255 });
+}
+
+function persistIncomingOrderUpload(
+  file,
+  { typeRoot, actorId, orderNumber, orderId, writtenPaths }
+) {
+  const stored = fileStorage.saveOrderUploadFromMemory(file, {
+    typeRoot,
+    employeeId: actorId,
+    orderNumber,
+    orderId,
+  });
+  if (stored && writtenPaths) {
+    writtenPaths.push(stored);
+  }
+  return stored;
+}
+
+function discardWrittenUploads(writtenPaths = []) {
+  writtenPaths.forEach((storagePath) => {
+    fileStorage.deleteStoredUploadIfExists(storagePath);
+  });
+}
+
 async function nestAndPersistSubpoenaPath(
   connection,
   { orderId, orderNumber, storagePath, actorId }
 ) {
   const nestedPath = nestOrderUploadPath(storagePath, actorId, orderNumber);
-  if (nestedPath && nestedPath !== storagePath) {
+  const nextPath = nestedPath || storagePath;
+  if (nextPath) {
     await connection.execute(
       `UPDATE orders
        SET subpoena_storage_path = :subpoenaStoragePath
        WHERE id = :orderId`,
-      { subpoenaStoragePath: nestedPath, orderId }
+      { subpoenaStoragePath: nextPath, orderId }
     );
   }
-  return nestedPath || storagePath;
+  return nextPath;
 }
 
 function buildOrderDbPayload(data) {
@@ -1079,6 +1124,8 @@ function mapOrderListRow(
     isSubpoena: readHasSubpoena(row),
     hasSubpoenaFile: Boolean(row.subpoena_storage_path),
     subpoenaUrl: buildSubpoenaUrl(row.subpoena_storage_path),
+    subpoenaOriginalFileName: row.subpoena_original_file_name || "",
+    subpoenaFileName: row.subpoena_original_file_name || "",
     isRecords: hasAnyRecordsRequested(orderRecords),
     isWriteOffs: writeOffState.isWriteOffs,
     court: row.court || "",
@@ -1409,6 +1456,8 @@ function mapOrderDetail(
     subpoenaFile: null,
     additionalDocumentFile: null,
     subpoenaStoragePath: row.subpoena_storage_path || null,
+    subpoenaOriginalFileName: row.subpoena_original_file_name || "",
+    subpoenaFileName: row.subpoena_original_file_name || "",
     subpoenaUrl: buildSubpoenaUrl(row.subpoena_storage_path),
     subpoenaUploadedAt: row.subpoena_uploaded_at || null,
     subpoenaUploadedAtDisplay: toShortDate(row.subpoena_uploaded_at),
@@ -2158,21 +2207,31 @@ async function addOrderNote(orderId, data, actorId, file, options = {}) {
   );
   const timeZone = options.timezone || config.businessTimezone;
 
-  const attachmentPath = nestOrderUploadPath(
-    toRelativeStoragePath(file),
-    actorId,
-    order.order_number
-  );
+  const writtenUploadPaths = [];
+  let attachmentPath = null;
+  let noteId;
+  try {
+    attachmentPath = persistIncomingOrderUpload(file, {
+      typeRoot: ORDER_UPLOAD_DIRS.orderNotes,
+      actorId,
+      orderNumber: order.order_number,
+      orderId: order.id,
+      writtenPaths: writtenUploadPaths,
+    });
 
-  const noteId = await Order.createNote({
-    orderId: order.id,
-    createdBy: actorId || null,
-    authorName,
-    note: noteText,
-    callbackDate: callbackAt,
-    attachmentPath,
-    isCalled: 0,
-  });
+    noteId = await Order.createNote({
+      orderId: order.id,
+      createdBy: actorId || null,
+      authorName,
+      note: noteText,
+      callbackDate: callbackAt,
+      attachmentPath,
+      isCalled: 0,
+    });
+  } catch (error) {
+    discardWrittenUploads(writtenUploadPaths);
+    rethrowServiceError(error);
+  }
 
   // Optional admin-only tagging — never blocks or changes core note creation.
   try {
@@ -2256,11 +2315,14 @@ async function updateOrderNote(orderId, noteId, data, actorId, file, options = {
   }
 
   const authorName = await resolveAuthorName(actorId);
-  const attachmentPath = nestOrderUploadPath(
-    toRelativeStoragePath(file),
+  const writtenUploadPaths = [];
+  const attachmentPath = persistIncomingOrderUpload(file, {
+    typeRoot: ORDER_UPLOAD_DIRS.orderNotes,
     actorId,
-    order.order_number
-  );
+    orderNumber: order.order_number,
+    orderId: order.id,
+    writtenPaths: writtenUploadPaths,
+  });
   const callbackAt = resolveCallbackAtUtc(data.callbackDate, timeZone);
 
   const pool = getPool();
@@ -2296,6 +2358,7 @@ async function updateOrderNote(orderId, noteId, data, actorId, file, options = {
     await connection.commit();
   } catch (error) {
     await connection.rollback();
+    discardWrittenUploads(writtenUploadPaths);
     rethrowServiceError(error);
   } finally {
     connection.release();
@@ -2485,24 +2548,31 @@ async function updateOrderWorkflowStage(orderId, stageName, stageStatus) {
 
 async function saveOrderDocuments(
   connection,
-  { orderId, orderNumber, additionalDocFile, documentName, actorId }
+  { orderId, orderNumber, additionalDocFile, documentName, actorId, writtenPaths }
 ) {
   // A subpoena uploaded with an order is stored directly on the order
   // (orders.subpoena_storage_path). The unprocessed_subpoenas table is
   // reserved for batch-scan parents (order_id NULL, children linked via
   // batch_scan_extracts), so no row is created here.
   if (additionalDocFile) {
+    const storagePath = persistIncomingOrderUpload(additionalDocFile, {
+      typeRoot: ORDER_UPLOAD_DIRS.additionalDocuments,
+      actorId,
+      orderNumber,
+      orderId,
+      writtenPaths,
+    });
+    if (!storagePath) {
+      return false;
+    }
+
     await Order.createAdditionalDocument(connection, {
       orderId,
       documentName: trimOrNull(documentName) || additionalDocFile.originalname,
       originalFileName: additionalDocFile.originalname,
       mimeType: additionalDocFile.mimetype || null,
-      storagePath: nestOrderUploadPath(
-        toRelativeStoragePath(additionalDocFile),
-        actorId,
-        orderNumber
-      ),
-      fileSizeBytes: additionalDocFile.size || null,
+      storagePath,
+      fileSizeBytes: additionalDocFile.size || additionalDocFile.buffer?.length || null,
       uploadedBy: actorId || null,
     });
 
@@ -2855,6 +2925,7 @@ async function createOrder(data, actorId, files, options = {}) {
 
   const pool = getPool();
   const connection = await pool.getConnection();
+  const writtenUploadPaths = [];
 
   try {
     await connection.beginTransaction();
@@ -2921,7 +2992,15 @@ async function createOrder(data, actorId, files, options = {}) {
     }
 
     const providerId = await resolveProviderId(connection, orderInput);
-    const sharedSubpoenaPathFromUpload = toRelativeStoragePath(subpoenaFile);
+    const hasIncomingSubpoenaUpload = Boolean(
+      subpoenaFile?.buffer || subpoenaFile?.path
+    );
+    const sharedSubpoenaOriginalFileName = resolveSubpoenaOriginalFileName({
+      file: subpoenaFile,
+      extract: linkedExtract,
+      hasSubpoena: Boolean(subpoenaExtractId || hasIncomingSubpoenaUpload),
+    });
+    let sharedWrittenSubpoenaPath = null;
     let sharedArchivedSubpoenaPath = null;
     const createdOrderIds = [];
 
@@ -2970,18 +3049,23 @@ async function createOrder(data, actorId, files, options = {}) {
         }
         subpoenaStoragePath = sharedArchivedSubpoenaPath;
         fileStorage.deleteUnusedProcessedSubpoenaUpload(
-          sharedSubpoenaPathFromUpload,
+          toRelativeStoragePath(subpoenaFile),
           sharedArchivedSubpoenaPath
         );
+      } else if (sharedWrittenSubpoenaPath) {
+        subpoenaStoragePath = sharedWrittenSubpoenaPath;
       } else {
-        subpoenaStoragePath = sharedSubpoenaPathFromUpload;
+        subpoenaStoragePath = null;
       }
 
       const payload = buildOrderDbPayload(
         applyInjuryFromExtract({ ...typedInput, providerId }, linkedExtract)
       );
       maybeStashExternalOrderRef(payload, suppliedExternalNumber);
-      const hasSubpoenaFile = Boolean(subpoenaStoragePath);
+      const hasSubpoenaFile = Boolean(
+        subpoenaStoragePath ||
+          (!subpoenaExtractId && hasIncomingSubpoenaUpload)
+      );
       const orderFlags = resolveOrderFlags(typedInput, hasSubpoenaFile);
 
       const orderId = await Order.create(connection, {
@@ -2989,6 +3073,9 @@ async function createOrder(data, actorId, files, options = {}) {
         patientId,
         patientOrderSequence,
         subpoenaStoragePath,
+        subpoenaOriginalFileName: hasSubpoenaFile
+          ? sharedSubpoenaOriginalFileName
+          : null,
         subpoenaUploadedAt: hasSubpoenaFile ? new Date() : null,
         orderNumber,
         status: "Active",
@@ -2997,7 +3084,28 @@ async function createOrder(data, actorId, files, options = {}) {
         createdBy: actorId || null,
       });
 
-      if (subpoenaStoragePath) {
+      if (
+        !subpoenaExtractId &&
+        hasIncomingSubpoenaUpload &&
+        !sharedWrittenSubpoenaPath
+      ) {
+        const writtenPath = persistIncomingOrderUpload(subpoenaFile, {
+          typeRoot: ORDER_UPLOAD_DIRS.processedSubpoena,
+          actorId,
+          orderNumber,
+          orderId,
+          writtenPaths: writtenUploadPaths,
+        });
+        if (writtenPath) {
+          subpoenaStoragePath = await nestAndPersistSubpoenaPath(connection, {
+            orderId,
+            orderNumber,
+            storagePath: writtenPath,
+            actorId,
+          });
+          sharedWrittenSubpoenaPath = subpoenaStoragePath;
+        }
+      } else if (subpoenaStoragePath) {
         subpoenaStoragePath = await nestAndPersistSubpoenaPath(connection, {
           orderId,
           orderNumber,
@@ -3005,8 +3113,8 @@ async function createOrder(data, actorId, files, options = {}) {
           actorId,
         });
         sharedArchivedSubpoenaPath = subpoenaStoragePath;
-        if (sharedSubpoenaPathFromUpload) {
-          sharedSubpoenaPathFromUpload = subpoenaStoragePath;
+        if (sharedWrittenSubpoenaPath) {
+          sharedWrittenSubpoenaPath = subpoenaStoragePath;
         }
       }
 
@@ -3022,6 +3130,7 @@ async function createOrder(data, actorId, files, options = {}) {
           additionalDocFile,
           documentName: typedInput.documentName,
           actorId,
+          writtenPaths: writtenUploadPaths,
         });
         if (subpoenaExtractId) {
           await batchScanRepository.linkExtractToOrder(connection, {
@@ -3059,6 +3168,7 @@ async function createOrder(data, actorId, files, options = {}) {
     return orders;
   } catch (error) {
     await connection.rollback();
+    discardWrittenUploads(writtenUploadPaths);
     rethrowServiceError(error);
   } finally {
     connection.release();
@@ -3460,6 +3570,7 @@ async function updateOrder(id, data, actorId, files) {
 
   const pool = getPool();
   const connection = await pool.getConnection();
+  const writtenUploadPaths = [];
 
   try {
     await connection.beginTransaction();
@@ -3557,11 +3668,13 @@ async function updateOrder(id, data, actorId, files) {
         throw new ApiError(404, error.message || "Subpoena PDF not found");
       }
     } else {
-      const newSubpoenaPath = nestOrderUploadPath(
-        toRelativeStoragePath(subpoenaFile),
+      const newSubpoenaPath = persistIncomingOrderUpload(subpoenaFile, {
+        typeRoot: ORDER_UPLOAD_DIRS.processedSubpoena,
         actorId,
-        orderNumber
-      );
+        orderNumber,
+        orderId: existing.id,
+        writtenPaths: writtenUploadPaths,
+      });
       subpoenaStoragePath =
         newSubpoenaPath || existing.subpoena_storage_path || null;
     }
@@ -3599,6 +3712,12 @@ async function updateOrder(id, data, actorId, files) {
       patientOrderSequence:
         patientOrderSequence ?? existing.patient_order_sequence ?? null,
       subpoenaStoragePath,
+      subpoenaOriginalFileName: resolveSubpoenaOriginalFileName({
+        file: subpoenaFile,
+        extract: linkedExtract,
+        existingName: existing.subpoena_original_file_name,
+        hasSubpoena: hasSubpoenaFile,
+      }),
       subpoenaUploadedAt,
       hasSubpoena: orderFlags.hasSubpoena,
       orderNumber,
@@ -3642,6 +3761,7 @@ async function updateOrder(id, data, actorId, files) {
       additionalDocFile,
       documentName: data.documentName,
       actorId,
+      writtenPaths: writtenUploadPaths,
     });
 
     const savedPayments = await Order.findPaymentsByOrderId(existing.id, connection);
@@ -3683,6 +3803,7 @@ async function updateOrder(id, data, actorId, files) {
     return updated;
   } catch (error) {
     await connection.rollback();
+    discardWrittenUploads(writtenUploadPaths);
     rethrowServiceError(error);
   } finally {
     connection.release();
@@ -3851,7 +3972,8 @@ async function getOrderSubpoenaFile(orderId) {
 
   return {
     absolutePath,
-    fileName: path.basename(absolutePath),
+    fileName:
+      order.subpoena_original_file_name || path.basename(absolutePath),
   };
 }
 

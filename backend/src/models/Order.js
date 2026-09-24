@@ -209,7 +209,7 @@ const ORDER_COLUMNS = `
   ready_date, invoice_date, xray_invoice_date,
   specific_record, specific_doctor, specific_doctor_is_default, full_address,
   certificate_no_records, cnr_reason, cnr_delivery, cnr_date_sent, cnr_memo,
-  subpoena_storage_path, subpoena_uploaded_at, has_note, has_subpoena, creation_source, created_by,
+  subpoena_storage_path, subpoena_original_file_name, subpoena_uploaded_at, has_note, has_subpoena, creation_source, created_by,
   batch_chosen_facility_id, extracted_facility_id, facility_mismatch`;
 
 const ORDER_VALUES = `
@@ -225,7 +225,7 @@ const ORDER_VALUES = `
   :readyDate, :invoiceDate, :xrayInvoiceDate,
   :specificRecord, :specificDoctor, :specificDoctorIsDefault, :fullAddress,
   :certificateNoRecords, :cnrReason, :cnrDelivery, :cnrDateSent, :cnrMemo,
-  :subpoenaStoragePath, :subpoenaUploadedAt, :hasNote, :hasSubpoena, :creationSource, :createdBy,
+  :subpoenaStoragePath, :subpoenaOriginalFileName, :subpoenaUploadedAt, :hasNote, :hasSubpoena, :creationSource, :createdBy,
   :batchChosenFacilityId, :extractedFacilityId, :facilityMismatch`;
 
 const ORDER_UPDATE_SET = `
@@ -285,6 +285,7 @@ const ORDER_UPDATE_SET = `
   cnr_date_sent = :cnrDateSent,
   cnr_memo = :cnrMemo,
   subpoena_storage_path = :subpoenaStoragePath,
+  subpoena_original_file_name = :subpoenaOriginalFileName,
   subpoena_uploaded_at = :subpoenaUploadedAt,
   has_subpoena = :hasSubpoena,
   creation_source = :creationSource,
@@ -874,7 +875,7 @@ class Order {
     const [result] = await connection.execute(
       `INSERT INTO orders (${ORDER_COLUMNS}, created_at, updated_at)
        VALUES (${ORDER_VALUES}, NOW(), NOW())`,
-      data
+      { subpoenaOriginalFileName: null, ...data }
     );
 
     return result.insertId;
@@ -970,6 +971,7 @@ class Order {
     const [result] = await executor.execute(
       `UPDATE orders
        SET subpoena_storage_path = NULL,
+           subpoena_original_file_name = NULL,
            subpoena_uploaded_at = NULL,
            has_subpoena = 0,
            updated_at = NOW()
