@@ -1090,6 +1090,10 @@ export default function OrdersTable({
         if (requestId === requestIdRef.current) {
           setIsFetching(false);
           if (!silent) setLoading(false);
+        } else if (!silent) {
+          // A newer silent refresh can supersede this one. Still clear
+          // loading so the table cannot stay on "Loading orders...".
+          setLoading(false);
         }
       }
     },
@@ -2774,7 +2778,7 @@ export default function OrdersTable({
         order={selectedInvoiceOrder}
         returnToPath={listBackHref}
         onClose={() => setSelectedInvoiceOrder(null)}
-        onSaved={fetchOrders}
+        onSaved={() => fetchOrders({ silent: true, force: true })}
       />
 
       <CreateXrayInvoiceModal
@@ -2782,7 +2786,7 @@ export default function OrdersTable({
         order={selectedXrayOrder}
         returnToPath={listBackHref}
         onClose={() => setSelectedXrayOrder(null)}
-        onSaved={fetchOrders}
+        onSaved={() => fetchOrders({ silent: true, force: true })}
       />
 
       <CoverSheetModal
