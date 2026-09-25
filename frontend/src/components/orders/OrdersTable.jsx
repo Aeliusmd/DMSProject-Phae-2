@@ -79,6 +79,7 @@ import {
 import SubpoenaPreviewContent from "@/components/orders/new-order/SubpoenaPreviewContent";
 import { getOrderRecordSlots, getOrderTypeLabel } from "@/lib/orders/recordTypeUtils";
 import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
+import { usePeerOrderListSync } from "@/lib/orders/usePeerOrderListSync";
 
 const ORDERS_PER_PAGE = 10;
 
@@ -994,11 +995,11 @@ export default function OrdersTable({
   const [isFetching, setIsFetching] = useState(false);
 
   const fetchOrders = useCallback(
-    async ({ silent = false, force = false } = {}) => {
+    async ({ silent = false, force = false, quiet = false } = {}) => {
       if (silent && !force && Date.now() - lastFetchAtRef.current < 5000) return;
 
       const requestId = (requestIdRef.current += 1);
-      setIsFetching(true);
+      if (!quiet) setIsFetching(true);
 
       if (!silent) {
         setLoading(true);
@@ -1088,7 +1089,7 @@ export default function OrdersTable({
       } finally {
         lastFetchAtRef.current = Date.now();
         if (requestId === requestIdRef.current) {
-          setIsFetching(false);
+          if (!quiet) setIsFetching(false);
           if (!silent) setLoading(false);
         }
       }
@@ -1511,6 +1512,44 @@ export default function OrdersTable({
   }, [fetchOrders]);
 
   useDataRefresh(() => fetchOrders({ silent: true, force: true }));
+
+  const hasOpenOrderUi = Boolean(
+    selectedInvoiceOrder ||
+      selectedXrayOrder ||
+      selectedCoverSheetOrder ||
+      selectedXrayCoverSheetOrder ||
+      selectedCnrOrder ||
+      selectedCertificationOrder ||
+      selectedCopyLetterOrder ||
+      selectedLogOrder ||
+      selectedNoteListOrder ||
+      selectedAddNoteOrder ||
+      selectedMedicalRecordsOrder ||
+      selectedPrintInvoiceOrder ||
+      selectedPrintXrayInvoiceOrder ||
+      selectedSubpoenaOrder ||
+      selectedPickupOrder ||
+      selectedFaxOrder ||
+      facilityModalState ||
+      restoreInProcessOrder ||
+      cnrTextModal ||
+      sendInvoiceEmailModal.open ||
+      deleteModal.open ||
+      cancelModal.open ||
+      restoreModal.open ||
+      removeRecordsModal.open
+  );
+
+  usePeerOrderListSync({
+    paused: loading || actionLoading || hasOpenOrderUi,
+    onRefresh: () => {
+      if (useServerPagination && currentPage > 1) {
+        const cursor = cursorHistoryRef.current[currentPage - 1] ?? null;
+        if (cursor == null) return;
+      }
+      return fetchOrders({ silent: true, force: true, quiet: true });
+    },
+  });
 
   const filteredOrders = useMemo(() => {
     if (useServerPagination) {
