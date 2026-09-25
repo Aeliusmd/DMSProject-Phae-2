@@ -423,11 +423,27 @@ class Facility {
     }
   }
 
-  static async deactivate(id) {
-    const pool = getPool();
+  static async lockRowById(connection, id) {
+    const db = connection || getPool();
+    const [rows] = await db.execute(
+      `SELECT *
+       FROM facilities
+       WHERE id = :id
+       LIMIT 1
+       FOR UPDATE`,
+      { id }
+    );
+    return rows[0] || null;
+  }
 
-    await pool.execute(
-      `UPDATE facilities SET is_active = 0, updated_at = NOW() WHERE id = :id`,
+  static async deactivate(id, connection = null) {
+    const db = connection || getPool();
+
+    await db.execute(
+      `UPDATE facilities
+       SET is_active = 0, updated_at = NOW()
+       WHERE id = :id
+         AND is_active = 1`,
       { id }
     );
   }

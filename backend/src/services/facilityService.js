@@ -628,15 +628,37 @@ async function updateFacility(id, data, actorId) {
 }
 
 async function deleteFacility(id) {
-  const facility = await Facility.findById(id);
+  const pool = getPool();
+  const connection = await pool.getConnection();
 
-  if (!facility) {
-    throw new ApiError(404, "Facility not found");
+  try {
+    await connection.beginTransaction();
+
+    const facility = await Facility.lockRowById(connection, id);
+
+    if (!facility) {
+      throw new ApiError(404, "Facility not found");
+    }
+
+    if (!Number(facility.is_active)) {
+      throw new ApiError(409, "This facility is already deleted");
+    }
+
+    await Facility.deactivate(id, connection);
+    await connection.commit();
+
+    return {
+      deleted: true,
+      message: "Facility deleted successfully",
+      id: facility.id,
+      facilityName: facility.facility_name || "",
+    };
+  } catch (error) {
+    await connection.rollback();
+    rethrowServiceError(error);
+  } finally {
+    connection.release();
   }
-
-  await Facility.deactivate(id);
-
-  return { message: "Facility deleted successfully" };
 }
 
 async function createDoctors(facilityId, doctorsInput = []) {

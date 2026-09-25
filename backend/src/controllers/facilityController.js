@@ -186,21 +186,27 @@ exports.update = asyncHandler(async (req, res) => {
 });
 
 exports.remove = asyncHandler(async (req, res) => {
-  const facility = await facilityService.getFacilityById(req.params.id);
   const result = await facilityService.deleteFacility(req.params.id);
 
-  await activityLogService.recordFromRequest(req, {
-    ...buildFacilityLogBase(req, facility),
-    context: "facilities",
-    action: "delete",
-    details: `Deleted facility ${facility?.facilityName || req.params.id}`,
-  });
+  if (result.deleted) {
+    const facility = {
+      id: result.id,
+      facilityName: result.facilityName,
+    };
 
-  await notificationService.notifyFacilityEvent({
-    title: "Facility Deleted",
-    description: `${facility?.facilityName || "Facility"} was removed`,
-    facilityId: facility?.id || Number(req.params.id),
-  });
+    await activityLogService.recordFromRequest(req, {
+      ...buildFacilityLogBase(req, facility),
+      context: "facilities",
+      action: "delete",
+      details: `Deleted facility ${facility.facilityName || req.params.id}`,
+    });
+
+    await notificationService.notifyFacilityEvent({
+      title: "Facility Deleted",
+      description: `${facility.facilityName || "Facility"} was removed`,
+      facilityId: facility.id || Number(req.params.id),
+    });
+  }
 
   return ApiResponse.success(res, result, result.message);
 });
