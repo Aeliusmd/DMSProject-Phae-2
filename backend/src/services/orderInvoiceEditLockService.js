@@ -9,17 +9,21 @@ const LOCKED_MESSAGE =
   "Another user is editing this invoice. Please come again later.";
 const WRITEOFF_LOCKED_MESSAGE =
   "Another user is writing off this invoice. Please come again later.";
+const MANUAL_PAYMENT_LOCKED_MESSAGE =
+  "Another user is adding a payment to this order. Please come again later.";
 const INVOICE_KINDS = new Set([
   "regular",
   "xray",
   "regular_writeoff",
   "xray_writeoff",
+  "manual_payment",
 ]);
 
 function lockMessage(invoiceKind) {
-  return String(invoiceKind || "").endsWith("_writeoff")
-    ? WRITEOFF_LOCKED_MESSAGE
-    : LOCKED_MESSAGE;
+  const kind = String(invoiceKind || "");
+  if (kind === "manual_payment") return MANUAL_PAYMENT_LOCKED_MESSAGE;
+  if (kind.endsWith("_writeoff")) return WRITEOFF_LOCKED_MESSAGE;
+  return LOCKED_MESSAGE;
 }
 
 function toOrderId(orderId) {
@@ -196,6 +200,7 @@ async function assertNotLockedByOther(orderId, invoiceKind, employeeId) {
 module.exports = {
   LOCKED_MESSAGE,
   WRITEOFF_LOCKED_MESSAGE,
+  MANUAL_PAYMENT_LOCKED_MESSAGE,
   acquireOrderInvoiceEditLock,
   heartbeatOrderInvoiceEditLock,
   releaseOrderInvoiceEditLock,

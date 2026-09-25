@@ -4,7 +4,10 @@ const { throwIfInvalid } = require("../utils/validationUtils");
 const { validateManualPayment } = require("../validators/paymentValidator");
 const { validatePaymentSearchQuery, validatePaymentListQuery } = require("../validators/queryValidators");
 const paymentService = require("../services/paymentService");
+const orderInvoiceEditLockService = require("../services/orderInvoiceEditLockService");
 const activityLogService = require("../services/activityLogService");
+
+const MANUAL_PAYMENT_LOCK_KIND = "manual_payment";
 
 function formatCurrency(amount) {
   const num = Number(amount);
@@ -46,8 +49,40 @@ exports.searchOrderInvoices = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, result);
 });
 
+exports.acquireManualPaymentLock = asyncHandler(async (req, res) => {
+  const lock = await orderInvoiceEditLockService.acquireOrderInvoiceEditLock(
+    req.params.orderId,
+    MANUAL_PAYMENT_LOCK_KIND,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Payment edit lock acquired");
+});
+
+exports.heartbeatManualPaymentLock = asyncHandler(async (req, res) => {
+  const lock = await orderInvoiceEditLockService.heartbeatOrderInvoiceEditLock(
+    req.params.orderId,
+    MANUAL_PAYMENT_LOCK_KIND,
+    req.user.id
+  );
+  return ApiResponse.success(res, { lock }, "Payment edit lock refreshed");
+});
+
+exports.releaseManualPaymentLock = asyncHandler(async (req, res) => {
+  const result = await orderInvoiceEditLockService.releaseOrderInvoiceEditLock(
+    req.params.orderId,
+    MANUAL_PAYMENT_LOCK_KIND,
+    req.user.id
+  );
+  return ApiResponse.success(res, result, "Payment edit lock released");
+});
+
 exports.recordManualPayment = asyncHandler(async (req, res) => {
   throwIfInvalid(validateManualPayment(req.body));
+  await orderInvoiceEditLockService.assertNotLockedByOther(
+    req.body.orderId,
+    MANUAL_PAYMENT_LOCK_KIND,
+    req.user.id
+  );
   const result = await paymentService.recordManualInvoicePayment(
     req.body,
     req.user?.id

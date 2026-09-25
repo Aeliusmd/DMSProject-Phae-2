@@ -9,6 +9,18 @@ router.use(authenticate);
 router.get("/manual", paymentController.getManualPayments);
 router.get("/online", paymentController.getOnlinePayments);
 router.get("/orders/invoices/search", paymentController.searchOrderInvoices);
+router.post(
+  "/orders/:orderId/edit-lock",
+  paymentController.acquireManualPaymentLock
+);
+router.post(
+  "/orders/:orderId/edit-lock/heartbeat",
+  paymentController.heartbeatManualPaymentLock
+);
+router.delete(
+  "/orders/:orderId/edit-lock",
+  paymentController.releaseManualPaymentLock
+);
 router.get("/orders/:orderId/detail", paymentController.getOrderPaymentDetail);
 router.get(
   "/orders/:orderId/company-portal-wallet-receipt",

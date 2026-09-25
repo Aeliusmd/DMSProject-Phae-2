@@ -260,6 +260,33 @@ export async function searchOrderInvoices(orderId) {
   return data?.data || { order: null, invoices: [] };
 }
 
+export async function acquireOrderManualPaymentLock(orderId) {
+  const data = await request(`/payments/orders/${orderId}/edit-lock`, {
+    method: "POST",
+    auth: true,
+  });
+  return data?.data?.lock || null;
+}
+
+export async function heartbeatOrderManualPaymentLock(orderId) {
+  const data = await request(`/payments/orders/${orderId}/edit-lock/heartbeat`, {
+    method: "POST",
+    auth: true,
+  });
+  return data?.data?.lock || null;
+}
+
+export async function releaseOrderManualPaymentLock(orderId) {
+  try {
+    await authFetch(`/payments/orders/${orderId}/edit-lock`, {
+      method: "DELETE",
+      keepalive: true,
+    });
+  } catch {
+    // Leaving the payment form should not fail if release cannot complete.
+  }
+}
+
 export async function recordManualPayment(payload = {}) {
   const data = await request("/payments/manual", {
     method: "POST",

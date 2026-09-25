@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import useIsClient from "@/hooks/useIsClient";
+import AlertModal from "@/components/ui/AlertModal";
+import {
+  ORDER_MANUAL_PAYMENT_LOCK_MESSAGE,
+  useOrderManualPaymentLock,
+} from "@/lib/payments/useOrderManualPaymentLock";
 import {
   formatMoney,
   recordManualPayment,
@@ -26,6 +32,7 @@ const INVOICE_STYLES = {
 };
 
 export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
+  const router = useRouter();
   const mounted = useIsClient();
   const [orderId, setOrderId] = useState("");
   const [searching, setSearching] = useState(false);
@@ -37,6 +44,22 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
   const [fieldErrorsByType, setFieldErrorsByType] = useState({});
   const [savingType, setSavingType] = useState(null);
   const [saveError, setSaveError] = useState("");
+  const [paymentLockBlocked, setPaymentLockBlocked] = useState(false);
+
+  const lockOrderId = isOpen && orderInfo?.id ? orderInfo.id : null;
+  const { status: lockStatus, error: lockError } = useOrderManualPaymentLock(
+    lockOrderId
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      setPaymentLockBlocked(false);
+      return;
+    }
+    if (lockStatus === "blocked") {
+      setPaymentLockBlocked(true);
+    }
+  }, [isOpen, lockStatus]);
 
   if (!isOpen || !mounted) return null;
 
@@ -130,6 +153,12 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
 
   const handleSave = async (invoice) => {
     if (!orderInfo?.id) return;
+    if (lockStatus !== "held") {
+      if (lockStatus === "blocked") {
+        setPaymentLockBlocked(true);
+      }
+      return;
+    }
 
     const form = formByType[invoice.type] || {};
     const checkNumber = `${form.checkNumber || ""}`.trim();
@@ -178,6 +207,11 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
       setExpandedType(null);
       onSaved?.();
     } catch (error) {
+      if (Number(error?.status) === 409) {
+        setPaymentLockBlocked(true);
+        return;
+      }
+
       const { fieldErrors, message } = applyApiFieldErrors(error);
 
       if (Object.keys(fieldErrors).length > 0) {
@@ -195,9 +229,18 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
     }
   };
 
+  const handleLockDismiss = () => {
+    handleClose();
+    router.push("/payments");
+  };
+
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-[2px]">
-      <div className="flex max-h-[90vh] w-full max-w-[720px] flex-col overflow-hidden rounded-[12px] border border-[#E2E8F0] bg-white shadow-xl">
+      <div
+        className={`flex max-h-[90vh] w-full max-w-[720px] flex-col overflow-hidden rounded-[12px] border border-[#E2E8F0] bg-white shadow-xl ${
+          paymentLockBlocked ? "pointer-events-none select-none blur-[4px]" : ""
+        }`}
+      >
         <div className="flex items-start justify-between border-b border-[#E2E8F0] px-5 py-4">
           <div>
             <h2 className="text-[16px] font-semibold text-[#111827]">
@@ -249,9 +292,9 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
             </button>
           </div>
 
-          {searchError ? (
+          {searchError || (lockStatus === "error" && lockError) ? (
             <p className="mt-3 rounded-[6px] border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[12px] text-[#DC2626]">
-              {searchError}
+              {searchError || lockError}
             </p>
           ) : null}
 
@@ -296,7 +339,7 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
                     <button
                       type="button"
                       onClick={() => handleToggleInvoice(invoice)}
-                      disabled={invoice.isPaid}
+                      disabled={invoice.isPaid || lockStatus !== "held"}
                       className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left ${
                         invoice.isPaid
                           ? "cursor-default opacity-80"
@@ -414,7 +457,9 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
                             type="button"
                             onClick={() => handleSave(invoice)}
                             disabled={
-                              savingType === invoice.type || isPaymentFormInvalid
+                              savingType === invoice.type ||
+                              isPaymentFormInvalid ||
+                              lockStatus !== "held"
                             }
                             className="h-[38px] rounded-[6px] bg-[#0097B2] px-5 text-[12px] font-semibold text-white hover:bg-[#0086A0] disabled:cursor-not-allowed disabled:opacity-60"
                           >
@@ -438,6 +483,14 @@ export default function ManualPaymentModal({ isOpen, onClose, onSaved }) {
           ) : null}
         </div>
       </div>
+      <AlertModal
+        open={paymentLockBlocked}
+        variant="error"
+        title="Payment is being added"
+        message={ORDER_MANUAL_PAYMENT_LOCK_MESSAGE}
+        confirmLabel="OK"
+        onClose={handleLockDismiss}
+      />
     </div>,
     document.body
   );
