@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DashboardShell from "@/components/layout/DashboardShell";
 import OrderFilterBar, {
   defaultOrderFilters,
 } from "@/components/orders/OrderFilterBar";
 import OrdersTable from "@/components/orders/OrdersTable";
 import { getCompanyOrderStats } from "@/lib/orders/orderApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 import {
   ORDER_LIST_FILTER_KEYS,
   consumeOrderListFilters,
@@ -38,30 +39,28 @@ export default function CompanyOrdersPage() {
     );
   }, [filters]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await getCompanyOrderStats();
-        if (!cancelled) setStats(data);
-      } catch {
-        if (!cancelled) {
-          setStats({
-            totalOrders: 0,
-            inProcess: 0,
-            invoice: 0,
-            paid: 0,
-            released: 0,
-          });
-        }
+  const loadStats = useCallback(async ({ silent = false } = {}) => {
+    try {
+      const data = await getCompanyOrderStats();
+      setStats(data);
+    } catch {
+      if (!silent) {
+        setStats({
+          totalOrders: 0,
+          inProcess: 0,
+          invoice: 0,
+          paid: 0,
+          released: 0,
+        });
       }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    }
   }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useDataRefresh(() => loadStats({ silent: true }));
 
   return (
     <DashboardShell>

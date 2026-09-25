@@ -78,6 +78,7 @@ import {
 } from "@/lib/orders/rushUtils";
 import SubpoenaPreviewContent from "@/components/orders/new-order/SubpoenaPreviewContent";
 import { getOrderRecordSlots, getOrderTypeLabel } from "@/lib/orders/recordTypeUtils";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const ORDERS_PER_PAGE = 10;
 
@@ -1508,6 +1509,8 @@ export default function OrdersTable({
       document.removeEventListener("visibilitychange", refreshIfVisible);
     };
   }, [fetchOrders]);
+
+  useDataRefresh(() => fetchOrders({ silent: true, force: true }));
 
   const filteredOrders = useMemo(() => {
     if (useServerPagination) {

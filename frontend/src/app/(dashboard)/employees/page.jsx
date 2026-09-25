@@ -17,6 +17,7 @@ import {
   terminateEmployee,
   updateEmployee,
 } from "@/lib/employees/employeeApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const EMPLOYEES_PER_PAGE = 10;
 /** Quiet refresh so auto-reactivation shows without a full page reload. */
@@ -209,6 +210,14 @@ export default function EmployeesPage() {
     loadEmployees,
     tableBusy,
   ]);
+
+  useDataRefresh(() => loadEmployees({ silent: true }), {
+    paused:
+      Boolean(editEmployee) ||
+      isNewEmployeeModalOpen ||
+      tableBusy ||
+      isLoading,
+  });
 
   const withWriteLock = async (work) => {
     writeInFlightRef.current = true;

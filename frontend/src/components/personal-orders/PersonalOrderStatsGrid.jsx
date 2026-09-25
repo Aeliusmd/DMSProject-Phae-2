@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import StatCard from "@/components/dashboard/StatCard";
 import { getPersonalOrderStats } from "@/lib/personal-orders/personalOrderApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 function formatCount(value) {
   if (value === null || value === undefined) return "—";
@@ -15,30 +16,28 @@ export default function PersonalOrderStatsGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const loadStats = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-    getPersonalOrderStats()
-      .then((data) => {
-        if (active) {
-          setStats(data);
-          setError("");
-        }
-      })
-      .catch((err) => {
-        if (active) {
-          setStats(null);
-          setError(getApiErrorMessage(err, "Failed to load personal order stats"));
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    try {
+      const data = await getPersonalOrderStats();
+      setStats(data);
+      setError("");
+    } catch (err) {
+      if (!silent) {
+        setStats(null);
+        setError(getApiErrorMessage(err, "Failed to load personal order stats"));
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useDataRefresh(() => loadStats({ silent: true }));
 
   return (
     <div className="space-y-3">

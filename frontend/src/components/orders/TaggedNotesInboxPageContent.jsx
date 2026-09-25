@@ -8,6 +8,7 @@ import {
   markTaggedNoteAsRead,
 } from "@/lib/orders/orderNoteTagApi";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 export default function TaggedNotesInboxPageContent() {
   const [notes, setNotes] = useState([]);
@@ -16,25 +17,33 @@ export default function TaggedNotesInboxPageContent() {
   const [error, setError] = useState("");
   const [markingAll, setMarkingAll] = useState(false);
 
-  const loadInbox = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadInbox = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const data = await getTaggedNotesInbox({ limit: 100, offset: 0 });
       setNotes(data.notes);
       setUnreadCount(data.unreadCount);
     } catch (err) {
-      setNotes([]);
-      setUnreadCount(0);
-      setError(getApiErrorMessage(err, "Failed to load tagged notes"));
+      if (!silent) {
+        setNotes([]);
+        setUnreadCount(0);
+        setError(getApiErrorMessage(err, "Failed to load tagged notes"));
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadInbox();
   }, [loadInbox]);
+
+  useDataRefresh(() => loadInbox({ silent: true }), {
+    paused: markingAll,
+  });
 
   const handleMarkRead = async (tagId) => {
     const target = notes.find((item) => item.tagId === tagId);

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getTopProviders } from "@/lib/dashboard/dashboardApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const VISIBLE_PROVIDER_COUNT = 5;
 /** Top N by active case volume (then invoiced $); viewport shows 5, rest scroll. */
@@ -17,27 +18,28 @@ export default function DashboardTopProviders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const loadProviders = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-    getTopProviders(FETCH_PROVIDER_LIMIT)
-      .then((data) => {
-        if (active) setProviders(Array.isArray(data) ? data : []);
-      })
-      .catch((err) => {
-        if (active) {
-          setProviders([]);
-          setError(getApiErrorMessage(err, "Failed to load top providers"));
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    try {
+      const data = await getTopProviders(FETCH_PROVIDER_LIMIT);
+      setProviders(Array.isArray(data) ? data : []);
+      setError("");
+    } catch (err) {
+      if (!silent) {
+        setProviders([]);
+        setError(getApiErrorMessage(err, "Failed to load top providers"));
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadProviders();
+  }, [loadProviders]);
+
+  useDataRefresh(() => loadProviders({ silent: true }));
 
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-[10px] border border-[#E2E8F0] bg-white px-4 py-3 shadow-sm">

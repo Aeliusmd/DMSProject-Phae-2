@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getOrders } from "@/lib/orders/orderApi";
 import { resolveRushLabel, buildRushBadgeTooltip } from "@/lib/orders/rushUtils";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const RECENT_LIMIT = 8;
 
@@ -13,27 +14,28 @@ export default function DashboardRecentOrders({ fillHeight = false }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const loadOrders = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-    getOrders({ limit: RECENT_LIMIT })
-      .then((data) => {
-        if (!active) return;
-        setOrders(Array.isArray(data) ? data.slice(0, RECENT_LIMIT) : []);
-      })
-      .catch((err) => {
-        if (!active) return;
+    try {
+      const data = await getOrders({ limit: RECENT_LIMIT });
+      setOrders(Array.isArray(data) ? data.slice(0, RECENT_LIMIT) : []);
+      setError("");
+    } catch (err) {
+      if (!silent) {
         setOrders([]);
         setError(getApiErrorMessage(err, "Failed to load orders"));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  useDataRefresh(() => loadOrders({ silent: true }));
 
   return (
     <section

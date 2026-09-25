@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DashboardShell from "@/components/layout/DashboardShell";
 import CurrentDateTime from "@/components/dashboard/CurrentDateTime";
 import { getCompanyWiseInvoices } from "@/lib/invoices/invoiceApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const EMPTY_SUMMARY = {
   companies: 0,
@@ -22,36 +23,28 @@ export default function CompanyWiseInvoicesPage() {
   const [companies, setCompanies] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadCompanies = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-    async function loadCompanies() {
-      setLoading(true);
-
-      try {
-        const data = await getCompanyWiseInvoices();
-        if (cancelled) return;
-
-        setCompanies(data.companies);
-        setSummary(data.summary);
-      } catch {
-        if (!cancelled) {
-          setCompanies([]);
-          setSummary(EMPTY_SUMMARY);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+    try {
+      const data = await getCompanyWiseInvoices();
+      setCompanies(data.companies);
+      setSummary(data.summary);
+    } catch {
+      if (!silent) {
+        setCompanies([]);
+        setSummary(EMPTY_SUMMARY);
       }
+    } finally {
+      if (!silent) setLoading(false);
     }
-
-    loadCompanies();
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadCompanies();
+  }, [loadCompanies]);
+
+  useDataRefresh(() => loadCompanies({ silent: true }));
 
   const filteredCompanies = useMemo(() => {
     const query = appliedSearch.trim().toLowerCase();

@@ -5,6 +5,10 @@ import {
 } from "@/lib/networkErrors";
 import { withCredentials } from "@/lib/auth/fetchCredentials";
 import {
+  notifyDataChanged,
+  shouldAnnounceMutation,
+} from "@/lib/liveRefresh/dataRefresh";
+import {
   beginImpersonationSession,
   clearAuth,
   clearDeviceTrustToken,
@@ -478,6 +482,10 @@ export async function request(
       response.status,
       data?.errors || null
     );
+  }
+
+  if (shouldAnnounceMutation(path, method)) {
+    notifyDataChanged();
   }
 
   return data;

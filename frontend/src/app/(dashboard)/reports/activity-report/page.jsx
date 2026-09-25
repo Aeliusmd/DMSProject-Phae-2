@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/layout/DashboardShell";
@@ -9,6 +9,7 @@ import { canAccessActivityReport } from "@/lib/auth/roles";
 import { getFacilities } from "@/lib/facilities/facilityApi";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getActivityReport, downloadActivityReportPdf } from "@/lib/reports/reportApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 function formatDateInput(date) {
   const year = date.getFullYear();
@@ -100,36 +101,32 @@ export default function ActivityReportPage() {
     }
   }, [isSearchOpen]);
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
+  const loadReport = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
-    getActivityReport({
-      reportDate: appliedFilters.reportDate,
-      throughDate: appliedFilters.throughDate,
-      facilityId: appliedFilters.facility,
-      activity: appliedFilters.activity,
-      search: appliedSearch,
-    })
-      .then((data) => {
-        if (!active) return;
-        setCompanies(data.companies || []);
-        setSummary(data.summary || { facilityCount: 0, totalCases: 0 });
-      })
-      .catch((err) => {
-        if (!active) return;
+    try {
+      const data = await getActivityReport({
+        reportDate: appliedFilters.reportDate,
+        throughDate: appliedFilters.throughDate,
+        facilityId: appliedFilters.facility,
+        activity: appliedFilters.activity,
+        search: appliedSearch,
+      });
+      setCompanies(data.companies || []);
+      setSummary(data.summary || { facilityCount: 0, totalCases: 0 });
+      if (!silent) setError("");
+    } catch (err) {
+      if (!silent) {
         setCompanies([]);
         setSummary({ facilityCount: 0, totalCases: 0 });
         setError(getApiErrorMessage(err, "Failed to load activity report"));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, [
     appliedFilters.reportDate,
     appliedFilters.throughDate,
@@ -137,6 +134,14 @@ export default function ActivityReportPage() {
     appliedFilters.activity,
     appliedSearch,
   ]);
+
+  useEffect(() => {
+    loadReport();
+  }, [loadReport]);
+
+  useDataRefresh(() => loadReport({ silent: true }), {
+    paused: exporting,
+  });
 
   const facilityOptions = useMemo(() => {
     const sorted = [...facilities].sort((a, b) => {

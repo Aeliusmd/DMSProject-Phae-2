@@ -9,6 +9,7 @@ import {
   getInvoiceReportSummary,
   getInvoicesPaginated,
 } from "@/lib/invoices/invoiceApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const REPORT_INVOICES_PER_PAGE = 10;
 
@@ -67,8 +68,8 @@ export default function InvoicesPage() {
     [appliedFilters.from, appliedFilters.through, appliedFilters.orderId]
   );
 
-  const loadSummaries = useCallback(async () => {
-    setSummariesLoading(true);
+  const loadSummaries = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setSummariesLoading(true);
 
     try {
       const [
@@ -104,17 +105,19 @@ export default function InvoicesPage() {
         count: xrayResendData.count,
       }));
     } catch {
-      setOutstanding((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
-      setResend((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
-      setXrayOutstanding((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
-      setXrayResend((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
+      if (!silent) {
+        setOutstanding((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
+        setResend((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
+        setXrayOutstanding((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
+        setXrayResend((prev) => ({ ...prev, summary: EMPTY_SUMMARY, count: 0 }));
+      }
     } finally {
-      setSummariesLoading(false);
+      if (!silent) setSummariesLoading(false);
     }
   }, [dateFilters]);
 
-  const loadActiveTab = useCallback(async () => {
-    setLoading(true);
+  const loadActiveTab = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
     const requestFilters = {
       ...dateFilters,
@@ -165,19 +168,21 @@ export default function InvoicesPage() {
         }
       }
     } catch {
-      if (invoiceCategory === "xray") {
-        if (activeTab === "resend") {
-          setXrayResend({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
+      if (!silent) {
+        if (invoiceCategory === "xray") {
+          if (activeTab === "resend") {
+            setXrayResend({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
+          } else {
+            setXrayOutstanding({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
+          }
+        } else if (activeTab === "resend") {
+          setResend({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
         } else {
-          setXrayOutstanding({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
+          setOutstanding({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
         }
-      } else if (activeTab === "resend") {
-        setResend({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
-      } else {
-        setOutstanding({ groups: [], summary: EMPTY_SUMMARY, count: 0 });
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [activeTab, dateFilters, invoiceCategory]);
 
@@ -192,6 +197,13 @@ export default function InvoicesPage() {
   const reloadInvoices = useCallback(async () => {
     await Promise.all([loadSummaries(), loadActiveTab()]);
   }, [loadSummaries, loadActiveTab]);
+
+  useDataRefresh(() => {
+    void Promise.all([
+      loadSummaries({ silent: true }),
+      loadActiveTab({ silent: true }),
+    ]);
+  });
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;

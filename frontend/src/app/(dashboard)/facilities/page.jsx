@@ -10,6 +10,7 @@ import {
 } from "@/lib/facilities/facilityApi";
 import { getStoredUser } from "@/lib/auth/authStorage";
 import { canDeleteFacilities } from "@/lib/auth/roles";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const FACILITIES_PER_PAGE = 10;
 
@@ -55,9 +56,11 @@ export default function FacilitiesPage() {
     });
   };
 
-  const loadFacilities = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadFacilities = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     try {
       const cursor = cursorHistoryRef.current[currentPage - 1] ?? null;
@@ -104,10 +107,12 @@ export default function FacilitiesPage() {
         return next;
       });
     } catch (err) {
-      setError(err.message || "Failed to load facilities");
-      setFacilities([]);
+      if (!silent) {
+        setError(err.message || "Failed to load facilities");
+        setFacilities([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [appliedSearch, currentPage, sortDir]);
 
@@ -118,6 +123,8 @@ export default function FacilitiesPage() {
   useEffect(() => {
     loadFacilities();
   }, [loadFacilities]);
+
+  useDataRefresh(() => loadFacilities({ silent: true }));
 
   const handleSortDirChange = (nextDir) => {
     const normalized = nextDir === "asc" ? "asc" : "desc";

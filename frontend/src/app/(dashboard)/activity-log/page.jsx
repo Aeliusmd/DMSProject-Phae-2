@@ -12,6 +12,7 @@ import {
   getActivityLogsPaginated,
   getMyActivityLogsPaginated,
 } from "@/lib/activityLog/activityLogApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const ACTIVITY_LOGS_PER_PAGE = 10;
 
@@ -107,9 +108,11 @@ export default function ActivityLogPage() {
     nextCursorRef.current = null;
   }, []);
 
-  const loadLogs = useCallback(async () => {
-    setLogsLoading(true);
-    setPageError("");
+  const loadLogs = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLogsLoading(true);
+      setPageError("");
+    }
 
     try {
       let cursor = cursorHistoryRef.current[currentPage - 1] ?? null;
@@ -167,10 +170,12 @@ export default function ActivityLogPage() {
         return next;
       });
     } catch (error) {
-      setPageError(error.message || "Failed to load activity logs");
-      setActivityLogs([]);
+      if (!silent) {
+        setPageError(error.message || "Failed to load activity logs");
+        setActivityLogs([]);
+      }
     } finally {
-      setLogsLoading(false);
+      if (!silent) setLogsLoading(false);
     }
   }, [
     ownLogsOnly,
@@ -184,6 +189,10 @@ export default function ActivityLogPage() {
   useEffect(() => {
     loadLogs();
   }, [loadLogs]);
+
+  useDataRefresh(() => loadLogs({ silent: true }), {
+    paused: milestoneOpen,
+  });
 
   const handleDateFilterChange = (e) => {
     const { name, value } = e.target;

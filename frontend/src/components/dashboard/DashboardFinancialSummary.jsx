@@ -1,36 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getDashboardStats } from "@/lib/dashboard/dashboardApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 export default function DashboardFinancialSummary() {
   const [financial, setFinancial] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const loadFinancial = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-    getDashboardStats()
-      .then((stats) => {
-        if (active) setFinancial(stats?.financial || null);
-      })
-      .catch((err) => {
-        if (active) {
-          setFinancial(null);
-          setError(getApiErrorMessage(err, "Failed to load financial summary"));
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    try {
+      const stats = await getDashboardStats();
+      setFinancial(stats?.financial || null);
+      setError("");
+    } catch (err) {
+      if (!silent) {
+        setFinancial(null);
+        setError(getApiErrorMessage(err, "Failed to load financial summary"));
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadFinancial();
+  }, [loadFinancial]);
+
+  useDataRefresh(() => loadFinancial({ silent: true }));
 
   const items = useMemo(() => {
     if (!financial) return [];

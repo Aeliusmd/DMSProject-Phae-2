@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DashboardShell from "@/components/layout/DashboardShell";
 import UnprocessedSubpoenaCard from "@/components/orders/unprocessed/UnprocessedSubpoenaCard";
 import PdfPreviewDrawer from "@/components/orders/unprocessed/PdfPreviewDrawer";
 import { getUnprocessedSubpoenas } from "@/lib/orders/orderApi";
 import { mapUnprocessedSubpoenaItem } from "@/lib/orders/unprocessedUtils";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 export default function UnprocessedSubpoenasPage() {
   const [subpoenas, setSubpoenas] = useState([]);
@@ -13,28 +14,30 @@ export default function UnprocessedSubpoenasPage() {
   const [error, setError] = useState("");
   const [selectedSubpoena, setSelectedSubpoena] = useState(null);
 
-  useEffect(() => {
-    let active = true;
+  const loadSubpoenas = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-    getUnprocessedSubpoenas()
-      .then((items) => {
-        if (!active) return;
-        setSubpoenas(items.map(mapUnprocessedSubpoenaItem));
-      })
-      .catch((err) => {
-        if (active) {
-          setError(err.message || "Failed to load unprocessed subpoenas.");
-          setSubpoenas([]);
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    try {
+      const items = await getUnprocessedSubpoenas();
+      setSubpoenas(items.map(mapUnprocessedSubpoenaItem));
+      setError("");
+    } catch (err) {
+      if (!silent) {
+        setError(err.message || "Failed to load unprocessed subpoenas.");
+        setSubpoenas([]);
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadSubpoenas();
+  }, [loadSubpoenas]);
+
+  useDataRefresh(() => loadSubpoenas({ silent: true }), {
+    paused: Boolean(selectedSubpoena),
+  });
 
   return (
     <DashboardShell>

@@ -7,6 +7,7 @@ import PaymentsTable from "@/components/payments/PaymentsTable";
 import ManualPaymentModal from "@/components/payments/ManualPaymentModal";
 import CurrentDateTime from "@/components/dashboard/CurrentDateTime";
 import { getPayments } from "@/lib/payments/paymentApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 const PAYMENTS_PER_PAGE = 10;
 
@@ -93,14 +94,14 @@ export default function PaymentsPage() {
     : onlineCursorHistoryRef;
   const activePage = activeState.currentPage;
 
-  const loadActiveTab = useCallback(async () => {
+  const loadActiveTab = useCallback(async ({ silent = false } = {}) => {
     if (loadAbortRef.current) {
       loadAbortRef.current.abort();
     }
     const controller = new AbortController();
     loadAbortRef.current = controller;
 
-    setLoading(true);
+    if (!silent) setLoading(true);
 
     const cursor = activeCursorHistoryRef.current[activePage - 1] ?? null;
     const includeSummary = activePage === 1;
@@ -176,19 +177,21 @@ export default function PaymentsPage() {
         return;
       }
 
-      setActiveState((prev) => ({
-        ...prev,
-        payments: [],
-        summary:
-          paymentType === "manual"
-            ? EMPTY_MANUAL_SUMMARY
-            : EMPTY_ONLINE_SUMMARY,
-        pagination: { ...EMPTY_PAGINATION },
-        count: 0,
-        loaded: true,
-      }));
+      if (!silent) {
+        setActiveState((prev) => ({
+          ...prev,
+          payments: [],
+          summary:
+            paymentType === "manual"
+              ? EMPTY_MANUAL_SUMMARY
+              : EMPTY_ONLINE_SUMMARY,
+          pagination: { ...EMPTY_PAGINATION },
+          count: 0,
+          loaded: true,
+        }));
+      }
     } finally {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && !silent) {
         setLoading(false);
       }
     }
@@ -211,6 +214,10 @@ export default function PaymentsPage() {
       }
     };
   }, [loadActiveTab, refreshKey]);
+
+  useDataRefresh(() => loadActiveTab({ silent: true }), {
+    paused: manualPaymentModalOpen,
+  });
 
   const resetTabPagination = useCallback((setter, historyRef) => {
     setter((prev) => {

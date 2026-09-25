@@ -7,6 +7,7 @@ import { getStoredUser } from "@/lib/auth/authStorage";
 import { isEmployee, isManager } from "@/lib/auth/roles";
 import { getNotifications } from "@/lib/notifications/notificationsApi";
 import { getTaggedNotesUnreadCount } from "@/lib/orders/orderNoteTagApi";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 export default function Topbar({ onToggleSidebar, sidebarExpanded = false }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -55,6 +56,11 @@ export default function Topbar({ onToggleSidebar, sidebarExpanded = false }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [loadNotifications, loadTaggedUnread]);
+
+  useDataRefresh(() => {
+    void loadNotifications();
+    void loadTaggedUnread();
+  });
 
   return (
     <header className="z-30 flex min-h-[52px] shrink-0 items-center gap-2 border-b border-[#E2E8F0] bg-white px-2 py-2 sm:gap-3 sm:px-[18px]">

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CurrentDateTime from "@/components/dashboard/CurrentDateTime";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getDashboardStats } from "@/lib/dashboard/dashboardApi";
 import { getCurrentUser } from "@/lib/auth/authApi";
 import { getStoredUser } from "@/lib/auth/authStorage";
 import { isUnprocessedSubpoenasHidden } from "@/lib/portalNavigationVisibility";
+import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
 
 function formatCount(value) {
   if (value === null || value === undefined) return "—";
@@ -52,27 +53,28 @@ export default function DashboardOverview() {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
+  const loadStats = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-    getDashboardStats()
-      .then((data) => {
-        if (active) setStats(data);
-      })
-      .catch((err) => {
-        if (active) {
-          setStats(null);
-          setError(getApiErrorMessage(err, "Failed to load dashboard stats"));
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    try {
+      const data = await getDashboardStats();
+      setStats(data);
+      setError("");
+    } catch (err) {
+      if (!silent) {
+        setStats(null);
+        setError(getApiErrorMessage(err, "Failed to load dashboard stats"));
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useDataRefresh(() => loadStats({ silent: true }));
 
   const statCards = useMemo(() => {
     const cards = [
