@@ -79,7 +79,6 @@ import {
 import SubpoenaPreviewContent from "@/components/orders/new-order/SubpoenaPreviewContent";
 import { getOrderRecordSlots, getOrderTypeLabel } from "@/lib/orders/recordTypeUtils";
 import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
-import { useSharedOrderRowSync } from "@/lib/orders/useSharedOrderRowSync";
 
 const ORDERS_PER_PAGE = 10;
 
@@ -1512,76 +1511,6 @@ export default function OrdersTable({
   }, [fetchOrders]);
 
   useDataRefresh(() => fetchOrders({ silent: true, force: true }));
-
-  const mapSharedOrderRow = useCallback(
-    (raw) => toRenderOrder(raw, companyPortalMode),
-    [companyPortalMode]
-  );
-
-  const busyOrderIds = useMemo(
-    () =>
-      [
-        selectedInvoiceOrder?.dbId,
-        selectedXrayOrder?.dbId,
-        selectedCoverSheetOrder?.dbId,
-        selectedXrayCoverSheetOrder?.dbId,
-        selectedCnrOrder?.dbId,
-        selectedCertificationOrder?.dbId,
-        selectedCopyLetterOrder?.dbId,
-        selectedLogOrder?.dbId,
-        selectedNoteListOrder?.dbId,
-        selectedAddNoteOrder?.dbId,
-        selectedMedicalRecordsOrder?.dbId,
-        selectedPrintInvoiceOrder?.dbId,
-        selectedPrintXrayInvoiceOrder?.dbId,
-        selectedSubpoenaOrder?.dbId,
-        selectedPickupOrder?.dbId,
-        selectedFaxOrder?.dbId,
-        facilityModalState?.order?.dbId,
-        restoreInProcessOrder?.dbId,
-        cnrTextModal?.dbId,
-        cnrTextModal?.order?.dbId,
-        sendInvoiceEmailModal.open ? sendInvoiceEmailModal.order?.dbId : null,
-        deleteModal.open ? deleteModal.order?.dbId : null,
-        cancelModal.open ? cancelModal.order?.dbId : null,
-        restoreModal.open ? restoreModal.order?.dbId : null,
-        removeRecordsModal.open ? removeRecordsModal.order?.dbId : null,
-      ].filter(Boolean),
-    [
-      selectedInvoiceOrder,
-      selectedXrayOrder,
-      selectedCoverSheetOrder,
-      selectedXrayCoverSheetOrder,
-      selectedCnrOrder,
-      selectedCertificationOrder,
-      selectedCopyLetterOrder,
-      selectedLogOrder,
-      selectedNoteListOrder,
-      selectedAddNoteOrder,
-      selectedMedicalRecordsOrder,
-      selectedPrintInvoiceOrder,
-      selectedPrintXrayInvoiceOrder,
-      selectedSubpoenaOrder,
-      selectedPickupOrder,
-      selectedFaxOrder,
-      facilityModalState,
-      restoreInProcessOrder,
-      cnrTextModal,
-      sendInvoiceEmailModal,
-      deleteModal,
-      cancelModal,
-      restoreModal,
-      removeRecordsModal,
-    ]
-  );
-
-  useSharedOrderRowSync({
-    orders,
-    setOrders,
-    mapRow: mapSharedOrderRow,
-    paused: loading || actionLoading,
-    busyOrderIds,
-  });
 
   const filteredOrders = useMemo(() => {
     if (useServerPagination) {
