@@ -1,7 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { applyApiFieldErrors, getApiErrorMessage, hasValidationErrors } from "@/lib/apiErrorUtils";
+import AlertModal from "@/components/ui/AlertModal";
+import {
+  ORDER_INVOICE_WRITEOFF_LOCK_MESSAGE,
+  useOrderInvoiceWriteOffLocks,
+} from "@/lib/invoices/useOrderInvoiceEditLock";
 
 function parseCurrency(value) {
   if (typeof value === "number") return value;
@@ -22,13 +28,45 @@ export default function WriteOffInvoiceModal({
   invoices = [],
   onClose,
   onSubmit,
+  returnToPath = "",
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const listBackHref = returnToPath || pathname || "/invoices";
   const [writeOffType, setWriteOffType] = useState("full");
   const [specifiedAmount, setSpecifiedAmount] = useState("");
   const [orderAction, setOrderAction] = useState("keep_write_off");
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [writeOffLockBlocked, setWriteOffLockBlocked] = useState(false);
+
+  const lockTargets = useMemo(() => {
+    if (!isOpen) return [];
+
+    const seen = new Set();
+    return invoices
+      .map((invoice) => {
+        const orderId = Number(invoice.orderId);
+        const kind =
+          invoice.invoiceType === "xray" ? "xray_writeoff" : "regular_writeoff";
+        return { orderId, kind };
+      })
+      .filter((target) => {
+        if (!Number.isFinite(target.orderId) || target.orderId <= 0) return false;
+        const key = `${target.orderId}:${target.kind}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((left, right) =>
+        `${left.orderId}:${left.kind}`.localeCompare(`${right.orderId}:${right.kind}`)
+      );
+  }, [isOpen, invoices]);
+
+  const { status: lockStatus, error: lockError } = useOrderInvoiceWriteOffLocks(
+    lockTargets
+  );
 
   const totalDue = useMemo(() => {
     return invoices.reduce(
@@ -63,6 +101,7 @@ export default function WriteOffInvoiceModal({
       setFieldErrors({});
       setError("");
       setSubmitting(false);
+      setWriteOffLockBlocked(false);
     }
   }
 
@@ -106,6 +145,12 @@ export default function WriteOffInvoiceModal({
   ]);
 
   const isFormInvalid = hasValidationErrors(clientValidationErrors);
+
+  useEffect(() => {
+    if (lockStatus === "blocked") {
+      setWriteOffLockBlocked(true);
+    }
+  }, [lockStatus]);
 
   if (!isOpen) return null;
 
@@ -186,6 +231,13 @@ export default function WriteOffInvoiceModal({
       return;
     }
 
+    if (lockStatus !== "held") {
+      if (lockStatus === "blocked") {
+        setWriteOffLockBlocked(true);
+      }
+      return;
+    }
+
     if (!onSubmit) {
       onClose?.();
       return;
@@ -197,6 +249,11 @@ export default function WriteOffInvoiceModal({
       await onSubmit(buildPayload());
       onClose?.();
     } catch (err) {
+      if (Number(err?.status) === 409) {
+        setWriteOffLockBlocked(true);
+        return;
+      }
+
       const { fieldErrors: apiErrors, message } = applyApiFieldErrors(err);
 
       if (apiErrors.orderAction) {
@@ -216,9 +273,18 @@ export default function WriteOffInvoiceModal({
     }
   };
 
+  const handleLockDismiss = () => {
+    onClose?.();
+    router.push(listBackHref);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="w-full max-w-[560px] rounded-[12px] bg-white shadow-xl">
+      <div
+        className={`w-full max-w-[560px] rounded-[12px] bg-white shadow-xl ${
+          writeOffLockBlocked ? "pointer-events-none select-none blur-[4px]" : ""
+        }`}
+      >
         <div className="flex items-start justify-between gap-4 border-b border-[#E2E8F0] px-6 py-5">
           <div>
             <h2 className="text-[16px] font-semibold text-[#111827]">
@@ -381,9 +447,9 @@ export default function WriteOffInvoiceModal({
             <p className="text-[11px] font-medium text-red-600">{fieldErrors.orderAction}</p>
           ) : null}
 
-          {error && (
+          {(error || (lockStatus === "error" && lockError)) && (
             <div className="rounded-[8px] border border-red-200 bg-red-50 px-4 py-3 text-[12px] font-medium text-red-600">
-              {error}
+              {error || lockError}
             </div>
           )}
         </div>
@@ -400,17 +466,27 @@ export default function WriteOffInvoiceModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || isFormInvalid}
+            disabled={submitting || isFormInvalid || lockStatus !== "held"}
             className="inline-flex h-[36px] items-center justify-center rounded-[6px] bg-red-500 px-5 text-[12px] font-semibold leading-none text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting
               ? "Processing..."
-              : hasDue
-                ? "Confirm Write Off"
-                : "Confirm Update Order"}
+              : lockStatus === "checking"
+                ? "Checking..."
+                : hasDue
+                  ? "Confirm Write Off"
+                  : "Confirm Update Order"}
           </button>
         </div>
       </div>
+      <AlertModal
+        open={writeOffLockBlocked}
+        variant="error"
+        title="Invoice is being written off"
+        message={ORDER_INVOICE_WRITEOFF_LOCK_MESSAGE}
+        confirmLabel="OK"
+        onClose={handleLockDismiss}
+      />
     </div>
   );
 }

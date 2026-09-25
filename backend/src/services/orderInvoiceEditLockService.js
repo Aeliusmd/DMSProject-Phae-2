@@ -7,7 +7,20 @@ const OrderInvoiceEditLock = require("../models/OrderInvoiceEditLock");
 const LOCK_TTL_MS = 2 * 60 * 1000;
 const LOCKED_MESSAGE =
   "Another user is editing this invoice. Please come again later.";
-const INVOICE_KINDS = new Set(["regular", "xray"]);
+const WRITEOFF_LOCKED_MESSAGE =
+  "Another user is writing off this invoice. Please come again later.";
+const INVOICE_KINDS = new Set([
+  "regular",
+  "xray",
+  "regular_writeoff",
+  "xray_writeoff",
+]);
+
+function lockMessage(invoiceKind) {
+  return String(invoiceKind || "").endsWith("_writeoff")
+    ? WRITEOFF_LOCKED_MESSAGE
+    : LOCKED_MESSAGE;
+}
 
 function toOrderId(orderId) {
   const id = Number(orderId);
@@ -83,7 +96,7 @@ async function acquireOrderInvoiceEditLock(orderId, invoiceKind, employeeId) {
       kind
     );
     if (existing && isActiveLock(existing) && !isHeldBy(existing, actorId)) {
-      throw new ApiError(409, LOCKED_MESSAGE);
+      throw new ApiError(409, lockMessage(kind));
     }
 
     await OrderInvoiceEditLock.upsert(connection, {
@@ -99,7 +112,7 @@ async function acquireOrderInvoiceEditLock(orderId, invoiceKind, employeeId) {
       kind
     );
     if (held && isActiveLock(held) && !isHeldBy(held, actorId)) {
-      throw new ApiError(409, LOCKED_MESSAGE);
+      throw new ApiError(409, lockMessage(kind));
     }
 
     await connection.commit();
@@ -129,7 +142,7 @@ async function heartbeatOrderInvoiceEditLock(orderId, invoiceKind, employeeId) {
       kind
     );
     if (existing && isActiveLock(existing) && !isHeldBy(existing, actorId)) {
-      throw new ApiError(409, LOCKED_MESSAGE);
+      throw new ApiError(409, lockMessage(kind));
     }
 
     await OrderInvoiceEditLock.upsert(connection, {
@@ -145,7 +158,7 @@ async function heartbeatOrderInvoiceEditLock(orderId, invoiceKind, employeeId) {
       kind
     );
     if (held && isActiveLock(held) && !isHeldBy(held, actorId)) {
-      throw new ApiError(409, LOCKED_MESSAGE);
+      throw new ApiError(409, lockMessage(kind));
     }
 
     await connection.commit();
@@ -176,12 +189,13 @@ async function assertNotLockedByOther(orderId, invoiceKind, employeeId) {
   );
 
   if (existing && !isHeldBy(existing, actorId)) {
-    throw new ApiError(409, LOCKED_MESSAGE);
+    throw new ApiError(409, lockMessage(kind));
   }
 }
 
 module.exports = {
   LOCKED_MESSAGE,
+  WRITEOFF_LOCKED_MESSAGE,
   acquireOrderInvoiceEditLock,
   heartbeatOrderInvoiceEditLock,
   releaseOrderInvoiceEditLock,

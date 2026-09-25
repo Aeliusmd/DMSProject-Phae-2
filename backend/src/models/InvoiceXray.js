@@ -54,6 +54,19 @@ class InvoiceXray {
     return rows[0] || null;
   }
 
+  static async lockRowByOrderId(connection, orderId) {
+    const db = connection || getPool();
+    const [rows] = await db.execute(
+      `SELECT id
+       FROM invoice_xray_details
+       WHERE order_id = :orderId
+       LIMIT 1
+       FOR UPDATE`,
+      { orderId }
+    );
+    return rows[0] || null;
+  }
+
   static async findByOrderIds(orderIds = []) {
     if (!orderIds.length) return {};
 

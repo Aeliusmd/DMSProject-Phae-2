@@ -2,6 +2,7 @@ const ApiError = require("../utils/ApiError");
 const { rethrowServiceError } = require("../utils/serviceErrorUtils");
 const Invoice = require("../models/Invoice");
 const InvoiceXray = require("../models/InvoiceXray");
+const orderInvoiceEditLockService = require("./orderInvoiceEditLockService");
 const CompanyInvoice = require("../models/CompanyInvoice");
 const InvoiceReport = require("../models/InvoiceReport");
 const Order = require("../models/Order");
@@ -4588,8 +4589,25 @@ async function syncOrderWriteOffStatus(connection, orderId, orderAction = "keep_
   return newStatus;
 }
 
+function writeOffItemSortKey(item = {}) {
+  const invoiceType = item.invoiceType === "xray" ? "xray" : "regular";
+  const id =
+    invoiceType === "xray"
+      ? Number(item.orderId || item.invoiceId || item.id || 0)
+      : Number(item.invoiceId || item.invoiceDbId || item.id || 0);
+  return `${invoiceType}:${Number.isFinite(id) ? id : 0}`;
+}
+
+function writeOffLockKind(invoiceType) {
+  return invoiceType === "xray" ? "xray_writeoff" : "regular_writeoff";
+}
+
 async function writeOffInvoices(body = {}, userId, options = {}) {
-  const items = Array.isArray(body.invoices) ? body.invoices : [];
+  const items = (Array.isArray(body.invoices) ? body.invoices : [])
+    .slice()
+    .sort((left, right) =>
+      writeOffItemSortKey(left).localeCompare(writeOffItemSortKey(right))
+    );
 
   if (!items.length) {
     throw new ApiError(400, "No invoices selected for write off");
@@ -4617,6 +4635,12 @@ async function writeOffInvoices(body = {}, userId, options = {}) {
           continue;
         }
 
+        await orderInvoiceEditLockService.assertNotLockedByOther(
+          orderId,
+          writeOffLockKind("xray"),
+          userId
+        );
+        await InvoiceXray.lockRowByOrderId(connection, orderId);
         const xrayRow = await InvoiceXray.findByOrderId(orderId, connection);
 
         if (!xrayRow) {
@@ -4724,11 +4748,22 @@ async function writeOffInvoices(body = {}, userId, options = {}) {
         continue;
       }
 
+      const lockedInvoice = await Invoice.lockRowById(connection, invoiceId);
+      if (!lockedInvoice) {
+        throw new ApiError(404, `Invoice ${invoiceId} not found`);
+      }
+
       const invoice = await Invoice.findById(invoiceId);
 
       if (!invoice) {
         throw new ApiError(404, `Invoice ${invoiceId} not found`);
       }
+
+      await orderInvoiceEditLockService.assertNotLockedByOther(
+        invoice.order_id,
+        writeOffLockKind("regular"),
+        userId
+      );
 
       if (invoice.status === "Written Off") {
         throw new ApiError(400, "Invoice is already written off");

@@ -53,6 +53,19 @@ class Invoice {
     return rows[0] || null;
   }
 
+  static async lockRowById(connection, id) {
+    const db = connection || getPool();
+    const [rows] = await db.execute(
+      `SELECT id
+       FROM invoices
+       WHERE id = :id
+       LIMIT 1
+       FOR UPDATE`,
+      { id }
+    );
+    return rows[0] || null;
+  }
+
   static async findByOrderId(orderId, connection = null) {
     const db = connection || getPool();
 
