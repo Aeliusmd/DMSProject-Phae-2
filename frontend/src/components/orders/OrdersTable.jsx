@@ -79,6 +79,10 @@ import {
 import SubpoenaPreviewContent from "@/components/orders/new-order/SubpoenaPreviewContent";
 import { getOrderRecordSlots, getOrderTypeLabel } from "@/lib/orders/recordTypeUtils";
 import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
+import {
+  mergeVisibleOrderRows,
+  useSafeVisibleOrderMerge,
+} from "@/lib/orders/useSafeVisibleOrderMerge";
 
 const ORDERS_PER_PAGE = 10;
 
@@ -1515,6 +1519,95 @@ export default function OrdersTable({
   }, [fetchOrders]);
 
   useDataRefresh(() => fetchOrders({ silent: true, force: true }));
+
+  const loadCurrentPageListRows = useCallback(async () => {
+    if (useServerPagination && currentPage > 1) {
+      const cursor = cursorHistoryRef.current[currentPage - 1] ?? null;
+      if (cursor == null) return null;
+    }
+
+    const baseFilters = {
+      facility: normalizedFilters.facility,
+      company: normalizedFilters.company,
+      year: normalizedFilters.year,
+      period: normalizedFilters.period,
+      status: normalizedFilters.status,
+      rushLevel: normalizedFilters.rushLevel,
+      search: normalizedFilters.search,
+      createdFrom: normalizedFilters.createdFrom,
+      createdTo: normalizedFilters.createdTo,
+      creationSource: normalizedFilters.creationSource || undefined,
+      excludeCompleted: Boolean(excludeCompleted),
+      sortDir: sortDir || undefined,
+    };
+
+    let data = [];
+    if (useServerPagination) {
+      const cursor = cursorHistoryRef.current[currentPage - 1] ?? null;
+      const result = await getOrdersPaginated({
+        ...baseFilters,
+        pagination: "keyset",
+        cursor,
+        pageSize: ORDERS_PER_PAGE,
+      });
+      data = result.orders || [];
+    } else {
+      data = await getOrders(baseFilters);
+    }
+
+    return data.map((row) => toRenderOrder(row, companyPortalMode));
+  }, [
+    companyPortalMode,
+    currentPage,
+    excludeCompleted,
+    normalizedFilters.company,
+    normalizedFilters.createdFrom,
+    normalizedFilters.createdTo,
+    normalizedFilters.creationSource,
+    normalizedFilters.facility,
+    normalizedFilters.period,
+    normalizedFilters.rushLevel,
+    normalizedFilters.search,
+    normalizedFilters.status,
+    normalizedFilters.year,
+    sortDir,
+    useServerPagination,
+  ]);
+
+  const hasOpenOrderUi = Boolean(
+    selectedInvoiceOrder ||
+      selectedXrayOrder ||
+      selectedCoverSheetOrder ||
+      selectedXrayCoverSheetOrder ||
+      selectedCnrOrder ||
+      selectedCertificationOrder ||
+      selectedCopyLetterOrder ||
+      selectedLogOrder ||
+      selectedNoteListOrder ||
+      selectedAddNoteOrder ||
+      selectedMedicalRecordsOrder ||
+      selectedPrintInvoiceOrder ||
+      selectedPrintXrayInvoiceOrder ||
+      selectedSubpoenaOrder ||
+      selectedPickupOrder ||
+      selectedFaxOrder ||
+      facilityModalState ||
+      restoreInProcessOrder ||
+      cnrTextModal ||
+      sendInvoiceEmailModal.open ||
+      deleteModal.open ||
+      cancelModal.open ||
+      restoreModal.open ||
+      removeRecordsModal.open
+  );
+
+  useSafeVisibleOrderMerge({
+    paused: loading || actionLoading || hasOpenOrderUi,
+    loadListRows: loadCurrentPageListRows,
+    applyRows: (freshRows) => {
+      setOrders((prev) => mergeVisibleOrderRows(prev, freshRows));
+    },
+  });
 
   const filteredOrders = useMemo(() => {
     if (useServerPagination) {
