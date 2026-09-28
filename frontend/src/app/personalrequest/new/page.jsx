@@ -169,7 +169,9 @@ export default function PersonalNewRequestPage() {
 
   useEffect(() => {
     fetchPersonalRequestConfig()
-      .then(setConfig)
+      .then((nextConfig) => {
+        if (nextConfig?.researchFee) setConfig(nextConfig);
+      })
       .catch(() => {});
   }, []);
 
@@ -431,7 +433,7 @@ export default function PersonalNewRequestPage() {
               ) : null}
               {!form.facilityId ? (
                 <div className="rounded-[8px] border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-[12px] text-[#92400E]">
-                  Facility not in our list — a ${config.researchFee || "5.00"}{" "}
+                  Facility not in our list — a ${config?.researchFee || "5.00"}{" "}
                   facility search fee will be added to your invoice and you will
                   be asked to pay when DMS creates and sends that invoice.
                 </div>
@@ -590,7 +592,7 @@ export default function PersonalNewRequestPage() {
                 Search by facility name or address from the DMS facilities list.
                 Selecting a match fills both fields. Facility name is optional;
                 address is required. If the facility is not in our list, DMS will
-                search for it. A ${config.researchFee || "5.00"} facility search
+                search for it. A ${config?.researchFee || "5.00"} facility search
                 fee is added to your invoice only if we locate and add the
                 facility, and you are asked to pay when that invoice is sent.
               </p>
@@ -664,7 +666,7 @@ export default function PersonalNewRequestPage() {
               {!form.facilityId && form.treatingFacilityAddress.trim() ? (
                 <div className="mt-2 rounded-[8px] border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-[12px] text-[#92400E]">
                   This address is not linked to a known facility. A $
-                  {config.researchFee || "5.00"} facility search fee will be
+                  {config?.researchFee || "5.00"} facility search fee will be
                   added to your invoice only if we locate and add this facility.
                   You will be asked to pay when the invoice is sent.
                 </div>

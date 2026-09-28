@@ -5,11 +5,20 @@ import {
   isPortalRouteBlocked,
 } from "@/lib/portalNavigationVisibility";
 
+function continueRequest(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("ngrok-skip-browser-warning", "true");
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!isPortalRouteBlocked(pathname)) {
-    return NextResponse.next();
+    return continueRequest(request);
   }
 
   return NextResponse.redirect(
@@ -33,5 +42,7 @@ export const config = {
     "/personal-orders/:path*",
     "/orders/unprocessed",
     "/orders/unprocessed/:path*",
+    "/api/:path*",
+    "/uploads/:path*",
   ],
 };

@@ -2,9 +2,15 @@ import { API_BASE_URL } from "@/config/api";
 import { ApiRequestError } from "@/lib/auth/authApi";
 import { isNetworkError, NETWORK_UNAVAILABLE_MESSAGE } from "@/lib/networkErrors";
 
-async function safeFetch(url, options) {
+async function safeFetch(url, options = {}) {
   try {
-    return await fetch(url, options);
+    return await fetch(url, {
+      ...options,
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+        ...(options.headers || {}),
+      },
+    });
   } catch (error) {
     if (isNetworkError(error)) {
       throw new ApiRequestError(NETWORK_UNAVAILABLE_MESSAGE, 0);

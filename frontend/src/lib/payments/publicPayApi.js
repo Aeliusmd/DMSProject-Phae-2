@@ -5,9 +5,7 @@ import { isNetworkError, NETWORK_UNAVAILABLE_MESSAGE } from "@/lib/networkErrors
 async function safeFetch(url, options) {
   try {
     const headers = {
-      ...(API_BASE_URL.includes(".ngrok-free.")
-        ? { "ngrok-skip-browser-warning": "true" }
-        : {}),
+      "ngrok-skip-browser-warning": "true",
       ...(options?.headers || {}),
     };
 
