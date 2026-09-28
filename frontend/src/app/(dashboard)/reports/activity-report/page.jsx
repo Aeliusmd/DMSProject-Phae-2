@@ -10,6 +10,10 @@ import { getFacilities } from "@/lib/facilities/facilityApi";
 import { getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getActivityReport, downloadActivityReportPdf } from "@/lib/reports/reportApi";
 import { useDataRefresh } from "@/lib/liveRefresh/useDataRefresh";
+import { getTodayInputDate } from "@/lib/utils/dateUtils";
+
+const FUTURE_DATE_RANGE_MESSAGE =
+  "Future dates are not allowed. Please select a valid date range.";
 
 function formatDateInput(date) {
   const year = date.getFullYear();
@@ -80,6 +84,7 @@ export default function ActivityReportPage() {
   const [appliedSearch, setAppliedSearch] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [dateFilterError, setDateFilterError] = useState("");
 
   useEffect(() => {
     getFacilities()
@@ -183,24 +188,49 @@ export default function ActivityReportPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "reportDate" || name === "throughDate") {
+      setDateFilterError("");
+    }
     setDraftFilters((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const applyDateRange = (nextFilters) => {
+    const fromDate = `${nextFilters.reportDate || ""}`.trim();
+    const toDate = `${nextFilters.throughDate || ""}`.trim();
+    const today = getTodayInputDate();
+
+    if (fromDate && toDate && fromDate > toDate) {
+      setDateFilterError("From date must be on or before To date.");
+      return false;
+    }
+
+    if ((fromDate && fromDate > today) || (toDate && toDate > today)) {
+      setDateFilterError(FUTURE_DATE_RANGE_MESSAGE);
+      return false;
+    }
+
+    setDateFilterError("");
+    setDraftFilters(nextFilters);
+    setAppliedFilters(nextFilters);
+    return true;
   };
 
   const handlePreset = (preset) => {
     const range = getPresetRange(preset);
-    setDraftFilters((prev) => ({
-      ...prev,
+    applyDateRange({
+      ...draftFilters,
       reportDate: range.from,
       throughDate: range.to,
-    }));
+    });
   };
 
   const handleApplyFilters = () => {
-    setAppliedFilters({ ...draftFilters });
+    applyDateRange({ ...draftFilters });
   };
 
   const handleResetFilters = () => {
     const defaults = getDefaultFilters();
+    setDateFilterError("");
     setDraftFilters(defaults);
     setAppliedFilters(defaults);
     setSearchInput("");
@@ -318,6 +348,7 @@ export default function ActivityReportPage() {
               name="throughDate"
               type="date"
               value={draftFilters.throughDate}
+              min={draftFilters.reportDate || undefined}
               onChange={handleChange}
             />
 
@@ -348,6 +379,15 @@ export default function ActivityReportPage() {
             />
           </div>
 
+          {dateFilterError && (
+            <p
+              role="alert"
+              className="mt-3 rounded-[6px] border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-[11px] font-medium text-red-600"
+            >
+              {dateFilterError}
+            </p>
+          )}
+
           {facilitiesLoadError && (
             <p className="mt-3 rounded-[6px] border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-[11px] font-medium text-red-600">
               {facilitiesLoadError}
@@ -372,7 +412,7 @@ export default function ActivityReportPage() {
             </button>
           </div>
 
-          <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
             <div className="flex flex-wrap items-center gap-2 text-[11px]">
               <span className="text-[#94A3B8]">Quick presets:</span>
 
@@ -393,9 +433,9 @@ export default function ActivityReportPage() {
               )}
             </div>
 
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex flex-wrap items-center gap-2">
               {isSearchOpen && (
-                <div className="relative w-full sm:w-[260px]">
+                <div className="relative w-[220px] sm:w-[260px]">
                   <div className="pointer-events-none absolute inset-y-0 left-0 flex w-[34px] items-center justify-center text-[#94A3B8]">
                     <SearchIcon />
                   </div>
@@ -426,7 +466,7 @@ export default function ActivityReportPage() {
               <button
                 type="button"
                 onClick={handleSearch}
-                className="inline-flex h-[34px] w-fit items-center justify-center gap-2 self-end rounded-[6px] bg-[#0097B2] px-5 text-[12px] font-semibold text-white hover:bg-[#0086A0] sm:self-auto"
+                className="inline-flex h-[34px] w-fit items-center justify-center gap-2 rounded-[6px] bg-[#0097B2] px-5 text-[12px] font-semibold text-white hover:bg-[#0086A0]"
               >
                 <SearchIcon />
                 Search
@@ -625,6 +665,8 @@ function ReportField({
   type = "text",
   options = [],
   disabled = false,
+  min,
+  max,
 }) {
   return (
     <div>
@@ -658,6 +700,8 @@ function ReportField({
           type={type}
           name={name}
           value={value}
+          min={min}
+          max={max}
           onChange={onChange}
           className="h-[36px] w-full rounded-[6px] border border-[#CBD5E1] bg-white px-3 text-[12px] text-[#111827] outline-none focus:border-[#0097B2] focus:ring-2 focus:ring-[#0097B2]/10"
         />

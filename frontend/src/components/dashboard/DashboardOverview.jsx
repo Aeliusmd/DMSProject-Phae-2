@@ -187,7 +187,7 @@ export default function DashboardOverview() {
 function DashboardStatCard({ label, value, icon, iconBg, iconColor, loading }) {
   return (
     <section className="min-w-0 rounded-[10px] border border-[#E2E8F0] bg-white px-4 py-4 shadow-sm">
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4">
         <div
           className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px]"
           style={{
@@ -197,8 +197,6 @@ function DashboardStatCard({ label, value, icon, iconBg, iconColor, loading }) {
         >
           {icon}
         </div>
-
-        <span className="text-[13px] text-[#CBD5E1]">→</span>
       </div>
 
       <h2 className="truncate text-[24px] font-semibold leading-none text-[#111827]">

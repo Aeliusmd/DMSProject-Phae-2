@@ -1878,6 +1878,44 @@ export default function OrdersTable({
                 overflow-wrap: anywhere;
                 word-break: break-word;
               }
+              .orders-table-fit td.order-status-cell {
+                overflow-wrap: normal;
+                word-break: normal;
+              }
+              .orders-table-fit td.order-status-cell * {
+                overflow-wrap: normal !important;
+                word-break: normal !important;
+              }
+              .orders-table-fit td.order-status-cell .order-status-badge {
+                white-space: nowrap !important;
+              }
+              .orders-table-fit td.order-status-cell .order-cancel-reason {
+                white-space: normal !important;
+                overflow-wrap: anywhere !important;
+                word-break: break-word !important;
+              }
+              .orders-table-fit td.order-status-cell .order-status-stack {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+                min-width: 0;
+                width: 100%;
+              }
+              .orders-table-fit td.order-status-cell .order-workflow-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                width: 100%;
+                min-width: 0;
+              }
+              .orders-table-fit td.order-status-cell .order-delivery-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 10px 12px;
+                width: 100%;
+              }
               ${
                 isReportView
                   ? `
@@ -1894,17 +1932,17 @@ export default function OrdersTable({
               .orders-table-fit th:nth-child(6),
               .orders-table-fit td:nth-child(6) { width: 8% !important; }
               .orders-table-fit th:nth-child(7),
-              .orders-table-fit td:nth-child(7) { width: 8% !important; }
+              .orders-table-fit td:nth-child(7) { width: 11% !important; }
               .orders-table-fit th:nth-child(8),
               .orders-table-fit td:nth-child(8) { width: 8% !important; }
               .orders-table-fit th:nth-child(9),
               .orders-table-fit td:nth-child(9) { width: 8% !important; }
               .orders-table-fit th:nth-child(10),
-              .orders-table-fit td:nth-child(10) { width: 8% !important; }
+              .orders-table-fit td:nth-child(10) { width: 6% !important; }
               .orders-table-fit th:nth-child(11),
               .orders-table-fit td:nth-child(11) { width: 8% !important; }
               .orders-table-fit th:nth-child(12),
-              .orders-table-fit td:nth-child(12) { width: 6% !important; }
+              .orders-table-fit td:nth-child(12) { width: 5% !important; }
               .orders-table-fit th:nth-child(13),
               .orders-table-fit td:nth-child(13) { width: 10% !important; }
                   `
@@ -1920,17 +1958,17 @@ export default function OrdersTable({
               .orders-table-fit th:nth-child(5),
               .orders-table-fit td:nth-child(5) { width: 9% !important; }
               .orders-table-fit th:nth-child(6),
-              .orders-table-fit td:nth-child(6) { width: 8% !important; }
+              .orders-table-fit td:nth-child(6) { width: 11% !important; }
               .orders-table-fit th:nth-child(7),
               .orders-table-fit td:nth-child(7) { width: 9% !important; }
               .orders-table-fit th:nth-child(8),
               .orders-table-fit td:nth-child(8) { width: 9% !important; }
               .orders-table-fit th:nth-child(9),
-              .orders-table-fit td:nth-child(9) { width: 10% !important; }
+              .orders-table-fit td:nth-child(9) { width: 8% !important; }
               .orders-table-fit th:nth-child(10),
               .orders-table-fit td:nth-child(10) { width: 8% !important; }
               .orders-table-fit th:nth-child(11),
-              .orders-table-fit td:nth-child(11) { width: 7% !important; }
+              .orders-table-fit td:nth-child(11) { width: 6% !important; }
               .orders-table-fit th:nth-child(12),
               .orders-table-fit td:nth-child(12) { width: 11% !important; }
                   `
@@ -2004,7 +2042,7 @@ export default function OrdersTable({
                 <th className="w-[160px] px-4 py-3">
                   {showDoctorColumn ? "Doctor" : "Facility"}
                 </th>
-                <th className="w-[125px] px-4 py-3">Status</th>
+                <th className="w-[180px] px-4 py-3">Status</th>
                 <th className="w-[170px] px-4 py-3">Invoice</th>
                 <th className="w-[170px] px-4 py-3">Records</th>
                 {!personalMode && (
@@ -2343,9 +2381,10 @@ export default function OrdersTable({
                       )}
                     </td>
 
-                    <td className="px-4 py-5 align-top">
+                    <td className="order-status-cell px-4 py-5 align-top">
+                      <div className="order-status-stack flex w-full min-w-0 flex-col items-start gap-1.5">
                       {!personalMode ? (
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <OrderStatusBadge status={order.displayOrderStatus} />
                           {order.rushLabel ? (
                             <RushBadge rush={order.rushLabel} order={order} />
@@ -2399,7 +2438,7 @@ export default function OrdersTable({
                           ) : null}
                         </div>
                       ) : (
-                        <div className="space-y-1">
+                        <div className="flex w-full min-w-0 flex-col items-start gap-1">
                           {order.status.map((stage) => (
                             <WorkflowStageItem
                               key={stage.key || stage.label}
@@ -2471,7 +2510,7 @@ export default function OrdersTable({
 
                           {isCancelledOrderStatus(order.orderStatus) &&
                           order.cancelReason ? (
-                            <p className="max-w-[140px] pt-1 text-[10px] leading-snug text-[#991B1B]">
+                            <p className="order-cancel-reason max-w-[140px] pt-1 text-[10px] leading-snug text-[#991B1B]">
                               Reason: {order.cancelReason}
                             </p>
                           ) : null}
@@ -2496,9 +2535,9 @@ export default function OrdersTable({
                         }
 
                         return (
-                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <div className="order-delivery-row flex w-full flex-wrap items-center gap-x-3 gap-y-1">
                             {deliveryActions.mail && (
-                              <div className="flex flex-col items-start gap-0.5">
+                              <div className="inline-flex items-center gap-1.5">
                                 <CompletedDeliveryLink
                                   label="Email"
                                   completed={mailStatus.completed}
@@ -2552,7 +2591,7 @@ export default function OrdersTable({
                           </div>
                         );
                       })()}
-
+                      </div>
                     </td>
 
                     <td className="px-4 py-5 align-top">
@@ -3624,14 +3663,14 @@ function WorkflowStageItem({
   if (stage.showRemoveRecords) {
     return (
       <div
-        className={`flex w-full flex-nowrap items-center gap-1.5 text-[10px] font-semibold ${style.text}`}
+        className={`order-workflow-row flex w-full min-w-0 items-center gap-1.5 text-[10px] font-semibold leading-none ${style.text}`}
       >
         <WorkflowStageIcon status={stage.status} />
         <button
           type="button"
           onClick={onPreviewRecords}
           disabled={!onPreviewRecords}
-          className="min-w-0 flex-1 truncate text-left hover:underline disabled:cursor-default"
+          className="min-w-0 flex-1 truncate text-left leading-none hover:underline disabled:cursor-default"
         >
           {stage.label}
         </button>
@@ -3639,11 +3678,11 @@ function WorkflowStageItem({
           type="button"
           onClick={onRemoveRecords}
           disabled={removingRecords || !onRemoveRecords}
-          className="flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded text-red-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded text-red-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Remove all uploaded records"
         >
           <CloseIcon />
-    </button>
+        </button>
       </div>
     );
   }
@@ -3651,15 +3690,15 @@ function WorkflowStageItem({
   if (stage.showResend) {
     return (
       <div
-        className={`flex w-full flex-nowrap items-center gap-1.5 text-[10px] font-semibold ${style.text}`}
+        className={`order-workflow-row flex w-full min-w-0 items-center gap-1.5 text-[10px] font-semibold leading-none ${style.text}`}
       >
         <WorkflowStageIcon status={stage.status} />
-        <span className="min-w-0">{stage.label}</span>
+        <span className="min-w-0 flex-1 truncate leading-none">{stage.label}</span>
         <button
           type="button"
           onClick={onResend}
           disabled={resending || !onResend}
-          className="shrink-0 text-[#007F96] underline hover:text-[#00667A] disabled:cursor-not-allowed disabled:opacity-60"
+          className="shrink-0 leading-none text-[#007F96] underline hover:text-[#00667A] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {resending ? "Sending..." : "Resend"}
         </button>
@@ -3667,7 +3706,7 @@ function WorkflowStageItem({
     );
   }
 
-  const className = `flex w-full items-center justify-between gap-2 text-left text-[10px] font-semibold ${style.text} ${
+  const className = `order-workflow-row flex w-full items-center justify-between gap-2 text-left text-[10px] font-semibold leading-none ${style.text} ${
     href ? "hover:underline" : ""
   }`;
 

@@ -18,7 +18,7 @@ const styles = {
 export default function OrderStatusBadge({ status }) {
   return (
     <span
-      className={`inline-flex whitespace-nowrap rounded-full px-[8px] py-[3px] text-[11px] font-medium ${
+      className={`order-status-badge inline-flex whitespace-nowrap rounded-full px-[8px] py-[3px] text-[11px] font-medium leading-none ${
         styles[status] || "bg-[#F1F5F9] text-[#334155]"
       }`}
     >

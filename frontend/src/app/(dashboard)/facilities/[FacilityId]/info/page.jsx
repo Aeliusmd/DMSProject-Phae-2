@@ -1329,7 +1329,7 @@ export default function FacilityDetailsPage() {
           deleteDoctorModal.doctor?.doctor || "this doctor"
         }?`}
         variant="danger"
-        confirmLabel="Confirm"
+        confirmLabel="Deactivate"
         cancelLabel="Cancel"
         onCancel={closeDeleteDoctorModal}
         onConfirm={handleConfirmDeleteDoctor}
@@ -1777,8 +1777,8 @@ function DoctorsTable({ doctors, onEdit, onDelete, onReactivate, onSetDefault })
                         onClick={() => onDelete(doctor)}
                         className="inline-flex h-[28px] w-full min-w-[88px] items-center justify-center gap-2 rounded-[6px] border border-red-200 bg-red-50 px-3 text-[11px] font-semibold text-red-500 hover:bg-red-100"
                       >
-                        <TrashIcon />
-                        Delete
+                        <DeactivateIcon />
+                        Deactivate
                       </button>
                     ) : (
                       <button
@@ -1786,7 +1786,8 @@ function DoctorsTable({ doctors, onEdit, onDelete, onReactivate, onSetDefault })
                         onClick={() => onReactivate(doctor)}
                         className="inline-flex h-[28px] w-full min-w-[88px] items-center justify-center gap-2 rounded-[6px] border border-[#67D8E8] bg-[#E6F7FA] px-3 text-[11px] font-semibold text-[#007F96] hover:bg-[#DDF6FA]"
                       >
-                        Reactivate
+                        <ActivateIcon />
+                        Activate
                       </button>
                     )}
                   </div>
@@ -2491,6 +2492,34 @@ function TrashIcon() {
         strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DeactivateIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.9" />
+      <path
+        d="M8 12h8"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ActivateIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.9" />
+      <path
+        d="M8 12h8M12 8v8"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
       />
     </svg>
   );

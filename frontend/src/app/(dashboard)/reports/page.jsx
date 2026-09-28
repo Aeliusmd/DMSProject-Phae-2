@@ -23,6 +23,10 @@ import {
   writeOrderListFilters,
 } from "@/lib/orders/orderListFilterStorage";
 import { STAFF_PORTAL_ORDERS_HIDDEN } from "@/lib/portalNavigationVisibility";
+import { getTodayInputDate } from "@/lib/utils/dateUtils";
+
+const FUTURE_DATE_RANGE_MESSAGE =
+  "Future dates are not allowed. Please select a valid date range.";
 
 const RUSH_LEVEL_OPTIONS = [
   { value: "", label: "All Rush Levels" },
@@ -80,6 +84,7 @@ export default function ReportsPage() {
   const [draftFilters, setDraftFilters] = useState(initialFilterState.draft);
   const [searchDraft, setSearchDraft] = useState(initialFilterState.searchDraft);
   const [appliedFilters, setAppliedFilters] = useState(initialFilterState.applied);
+  const [dateFilterError, setDateFilterError] = useState("");
   const [summary, setSummary] = useState({
     total: 0,
     startRecord: 0,
@@ -132,6 +137,10 @@ export default function ReportsPage() {
   }, []);
 
   const updateDraftFilter = (name, value) => {
+    if (name === "fromDate" || name === "toDate") {
+      setDateFilterError("");
+    }
+
     setDraftFilters((prev) => {
       const next = {
         ...prev,
@@ -145,6 +154,21 @@ export default function ReportsPage() {
   };
 
   const handleApplyFilters = () => {
+    const fromDate = `${draftFilters.fromDate || ""}`.trim();
+    const toDate = `${draftFilters.toDate || ""}`.trim();
+    const today = getTodayInputDate();
+
+    if (fromDate && toDate && fromDate > toDate) {
+      setDateFilterError("From date must be on or before To date.");
+      return;
+    }
+
+    if ((fromDate && fromDate > today) || (toDate && toDate > today)) {
+      setDateFilterError(FUTURE_DATE_RANGE_MESSAGE);
+      return;
+    }
+
+    setDateFilterError("");
     setAppliedFilters((prev) => ({
       ...draftFilters,
       search: prev.search || "",
@@ -170,6 +194,7 @@ export default function ReportsPage() {
       ...defaultDraftFilters,
     };
 
+    setDateFilterError("");
     setDraftFilters(nextDraft);
     setSearchDraft("");
     setAppliedFilters({
@@ -468,6 +493,15 @@ export default function ReportsPage() {
               Search
             </button>
           </div>
+
+          {dateFilterError && (
+            <p
+              role="alert"
+              className="mt-3 rounded-[6px] border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-[11px] font-medium text-red-600"
+            >
+              {dateFilterError}
+            </p>
+          )}
 
           {facilitiesError && (
             <p className="mt-3 rounded-[6px] border border-[#FEE2E2] bg-[#FEF2F2] px-3 py-2 text-[11px] font-medium text-red-600">
