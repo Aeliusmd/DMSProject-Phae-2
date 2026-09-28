@@ -104,9 +104,11 @@ export function validateNoteForm({
   callbackDate,
   attachment,
   existingAttachmentUrl,
+  requireCallbackDate = false,
 }) {
   const errors = {};
   const trimmedNote = `${noteText || ""}`.trim();
+  const trimmedCallbackDate = `${callbackDate || ""}`.trim();
 
   if (!trimmedNote) {
     errors.noteText = "Note text is required.";
@@ -119,10 +121,10 @@ export function validateNoteForm({
     if (markupError) errors.noteText = markupError;
   }
 
-  if (callbackDate) {
-    if (!isFutureDateTimeLocal(callbackDate)) {
-      errors.callbackDate = "Callback date and time must be in the future.";
-    }
+  if (requireCallbackDate && !trimmedCallbackDate) {
+    errors.callbackDate = "Callback Date & Time is required.";
+  } else if (trimmedCallbackDate && !isFutureDateTimeLocal(trimmedCallbackDate)) {
+    errors.callbackDate = "Callback date and time must be in the future.";
   }
 
   if (attachment) {

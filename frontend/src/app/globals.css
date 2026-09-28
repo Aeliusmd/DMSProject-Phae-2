@@ -17,6 +17,7 @@
 html {
   background: #f8fafc !important;
   color-scheme: only light;
+  cursor: default !important;
 }
 
 body {
@@ -24,6 +25,7 @@ body {
   background: #f8fafc !important;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  cursor: default !important;
 }
 
 /*
@@ -44,7 +46,8 @@ button,
 [type="range"],
 select,
 summary,
-label,
+label[for],
+label:has(input, select, textarea, button),
 [role="button"],
 [role="link"],
 [role="tab"],
@@ -69,6 +72,17 @@ select:disabled,
 [disabled],
 [aria-disabled="true"] {
   cursor: not-allowed !important;
+}
+
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]):not([type="image"]):not([type="hidden"]):not([readonly]):not(:disabled),
+textarea:not([readonly]):not(:disabled),
+[contenteditable="true"] {
+  cursor: text !important;
+}
+
+input[readonly],
+textarea[readonly] {
+  cursor: default !important;
 }
 
 .cursor-help {

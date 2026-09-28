@@ -142,6 +142,7 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
       noteText,
       callbackDate,
       attachment,
+      requireCallbackDate: true,
     });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -189,6 +190,7 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
             callbackDate={callbackDate}
             attachment={attachment}
             errors={errors}
+            callbackRequired
             minCallbackDateTime={getMinFutureDateTimeLocal()}
             onNoteTextChange={(value) => {
               setNoteText(value);

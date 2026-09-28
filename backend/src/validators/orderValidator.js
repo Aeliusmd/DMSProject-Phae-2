@@ -578,7 +578,7 @@ function validateUpdateOrder(body = {}) {
   return validateOrderPayload(body, { requireOrderNumber: false });
 }
 
-function validateOrderNote(body = {}) {
+function validateOrderNote(body = {}, { requireCallbackDate = false } = {}) {
   const errors = [];
   const note = trimToString(body.note);
 
@@ -591,6 +591,13 @@ function validateOrderNote(body = {}) {
     });
   } else {
     addNoHtmlMarkupError(errors, "note", note);
+  }
+
+  if (requireCallbackDate && !trimToString(body.callbackDate)) {
+    errors.push({
+      field: "callbackDate",
+      message: "Callback Date & Time is required.",
+    });
   }
 
   return { valid: errors.length === 0, errors };

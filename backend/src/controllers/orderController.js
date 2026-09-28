@@ -613,7 +613,7 @@ exports.getNotes = asyncHandler(async (req, res) => {
 });
 
 exports.createNote = asyncHandler(async (req, res) => {
-  const validation = validateOrderNote(req.body);
+  const validation = validateOrderNote(req.body, { requireCallbackDate: true });
 
   if (!validation.valid) {
     throw new ApiError(400, "Validation failed", validation.errors);
