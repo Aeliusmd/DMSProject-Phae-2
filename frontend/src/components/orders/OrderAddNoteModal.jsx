@@ -11,7 +11,7 @@ import {
 } from "@/lib/orders/orderNoteUtils";
 import OrderNoteFormFields from "@/components/orders/OrderNoteFormFields";
 import { getMinFutureDateTimeLocal } from "@/lib/utils/dateUtils";
-import { applyApiFieldErrors, getApiErrorMessage, hasValidationErrors } from "@/lib/apiErrorUtils";
+import { applyApiFieldErrors, getApiErrorMessage } from "@/lib/apiErrorUtils";
 import { getStoredUser } from "@/lib/auth/authStorage";
 import { isAdmin } from "@/lib/auth/roles";
 
@@ -81,6 +81,11 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
     };
   }, [isOpen, showTagPicker, canTagWorkers, staffSearch]);
 
+  const minCallbackDateTime = useMemo(
+    () => getMinFutureDateTimeLocal(),
+    [isOpen, orderId]
+  );
+
   const noteValidationErrors = useMemo(
     () =>
       validateNoteForm({
@@ -91,7 +96,17 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
     [noteText, callbackDate, attachment]
   );
 
-  const isNoteInvalid = hasValidationErrors(noteValidationErrors);
+  const displayedErrors = useMemo(
+    () => ({
+      ...noteValidationErrors,
+      ...errors,
+    }),
+    [noteValidationErrors, errors]
+  );
+
+  const isNoteInvalid = Boolean(
+    noteValidationErrors.noteText || noteValidationErrors.attachment
+  );
 
   const selectedWorkerIds = useMemo(
     () => selectedWorkers.map((worker) => Number(worker.id)),
@@ -189,9 +204,9 @@ export default function OrderAddNoteModal({ isOpen, order, onClose, onSaved }) {
             noteText={noteText}
             callbackDate={callbackDate}
             attachment={attachment}
-            errors={errors}
+            errors={displayedErrors}
             callbackRequired
-            minCallbackDateTime={getMinFutureDateTimeLocal()}
+            minCallbackDateTime={minCallbackDateTime}
             onNoteTextChange={(value) => {
               setNoteText(value);
               clearError("noteText");

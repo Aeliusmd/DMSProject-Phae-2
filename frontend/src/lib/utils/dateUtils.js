@@ -71,6 +71,29 @@ export function utcIsoToDateTimeLocal(value) {
   return toDateTimeLocalValue(parsed);
 }
 
+/** Parse a datetime-local value as a local Date (avoids UTC parsing of YYYY-MM-DDTHH:mm). */
+export function parseDateTimeLocal(value) {
+  if (!value) return null;
+
+  const trimmed = String(value).trim();
+  const match = trimmed.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/
+  );
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second = "0"] = match;
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  );
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 /** Earliest selectable future datetime-local value (next minute). */
 export function getMinFutureDateTimeLocal() {
   const nextMinute = new Date();
@@ -80,10 +103,13 @@ export function getMinFutureDateTimeLocal() {
 }
 
 export function isFutureDateTimeLocal(value) {
-  if (!value) return false;
+  const selected = parseDateTimeLocal(value);
+  if (!selected) return false;
 
-  const selected = new Date(value);
-  if (Number.isNaN(selected.getTime())) return false;
+  const minFuture = new Date();
+  minFuture.setSeconds(0, 0);
+  minFuture.setMinutes(minFuture.getMinutes() + 1);
+  selected.setSeconds(0, 0);
 
-  return selected.getTime() > Date.now();
+  return selected.getTime() >= minFuture.getTime();
 }
