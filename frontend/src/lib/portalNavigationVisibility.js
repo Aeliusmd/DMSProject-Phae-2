@@ -11,7 +11,7 @@ export const PORTAL_NAVIGATION_HIDDEN = false;
  * Orders source filter, Reports source filter, Payments).
  * Set to `false` to show them again — do not delete the pages.
  */
-export const STAFF_PORTAL_ORDERS_HIDDEN = true;
+export const STAFF_PORTAL_ORDERS_HIDDEN = false;
 
 /** Where external portal routes redirect when hidden. */
 export const PORTAL_ROUTE_REDIRECT = "/login";
